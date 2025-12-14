@@ -8,6 +8,38 @@ WORKER_BRANCH=${WORKER_BRANCH:-"main"}
 MODEL_DIR=${MODEL_DIR:-/opt/ComfyUI/models}
 CHECKPOINT_DIR="${MODEL_DIR}/checkpoints"
 
+
+# якщо є persistent volume
+if [ -d "/workspace" ]; then
+  echo "[entrypoint] /workspace detected, using persistent volume"
+
+  mkdir -p /workspace/ComfyUI/{models,output,workflows}
+
+  # models
+  if [ ! -L "/opt/ComfyUI/models" ]; then
+    rm -rf /opt/ComfyUI/models
+    ln -s /workspace/ComfyUI/models /opt/ComfyUI/models
+  fi
+
+  # output
+  if [ ! -L "/opt/ComfyUI/output" ]; then
+    rm -rf /opt/ComfyUI/output
+    ln -s /workspace/ComfyUI/output /opt/ComfyUI/output
+  fi
+
+  # workflows
+  if [ ! -L "/opt/ComfyUI/workflows" ]; then
+    rm -rf /opt/ComfyUI/workflows
+    ln -s /workspace/ComfyUI/workflows /opt/ComfyUI/workflows
+  fi
+
+else
+  echo "[entrypoint] /workspace not found, using container filesystem"
+fi
+
+
+
+
 mkdir -p "${CHECKPOINT_DIR}"
 mkdir -p "${WORK_DIR}"
 
@@ -26,6 +58,23 @@ fi
 if [ -f "${WORK_DIR}/requirements.txt" ]; then
   echo "[entrypoint] installing worker dependencies..."
   pip install --no-cache-dir -r "${WORK_DIR}/requirements.txt"
+fi
+
+WORKFLOWS_SRC="${WORK_DIR}/workflows"
+WORKFLOWS_DST="/opt/comfy_workflows"
+
+echo "[entrypoint] syncing workflows..."
+
+if [ -d "${WORKFLOWS_SRC}" ]; then
+  # якщо ще немає /opt/comfy_workflows – створюємо симлінк
+  if [ ! -e "${WORKFLOWS_DST}" ]; then
+    ln -s "${WORKFLOWS_SRC}" "${WORKFLOWS_DST}"
+    echo "[entrypoint] linked ${WORKFLOWS_SRC} -> ${WORKFLOWS_DST}"
+  else
+    echo "[entrypoint] ${WORKFLOWS_DST} already exists, skipping link"
+  fi
+else
+  echo "[entrypoint] WARNING: workflows dir ${WORKFLOWS_SRC} not found"
 fi
 
 download_sdxl() {

@@ -129,7 +129,7 @@ def queue_prompt_to_comfy(workflow: dict, client_id: str) -> str:
         "prompt": workflow,
         "client_id": client_id,
     }
-    r = requests.post(url, json=payload, timeout=30)
+    r = requests.post(url, json=payload, timeout=600)
     r.raise_for_status()
     data = r.json()
     prompt_id = data.get("prompt_id")
@@ -138,7 +138,7 @@ def queue_prompt_to_comfy(workflow: dict, client_id: str) -> str:
     return prompt_id
 
 
-def wait_for_result(prompt_id: str, timeout_sec: int = 300) -> dict:
+def wait_for_result(prompt_id: str, timeout_sec: int = 600) -> dict:
     """
     Полінг /history/{prompt_id}, поки не буде результату.
     Повертає JSON history.

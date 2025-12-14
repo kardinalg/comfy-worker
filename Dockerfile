@@ -9,6 +9,9 @@ RUN mkdir -p ${TMP_DIR} ${WORK_DIR}
 # git + curl, якщо їх немає в базовому образі
 RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
 
+ADD https://github.com/SaladTechnologies/comfyui-api/releases/download/1.8.2/comfyui-api /comfyui-api
+RUN chmod +x /comfyui-api
+
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
