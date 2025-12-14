@@ -83,6 +83,10 @@
       "samples": [
         "10",
         0
+      ],
+      "vae": [
+        "4",
+        2
       ]
     },
     "class_type": "VAEDecode",
@@ -92,7 +96,7 @@
   },
   "19": {
     "inputs": {
-      "filename_prefix": "FILE_NAME_PREFIX",
+      "filename_prefix": "lora_char",
       "images": [
         "17",
         0
