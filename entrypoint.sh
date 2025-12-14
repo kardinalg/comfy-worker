@@ -77,29 +77,8 @@ else
   echo "[entrypoint] WARNING: workflows dir ${WORKFLOWS_SRC} not found"
 fi
 
-download_sdxl() {
-  echo "[entrypoint] checking SDXL models in ${CHECKPOINT_DIR}"
-
-  if [ ! -f "${CHECKPOINT_DIR}/sd_xl_base_1.0.safetensors" ]; then
-    echo "[entrypoint] downloading sd_xl_base_1.0.safetensors..."
-    curl -L \
-      -o "${CHECKPOINT_DIR}/sd_xl_base_1.0.safetensors" \
-      "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors"
-  else
-    echo "[entrypoint] sd_xl_base_1.0.safetensors already exists"
-  fi
-
-  if [ ! -f "${CHECKPOINT_DIR}/sd_xl_refiner_1.0.safetensors" ]; then
-    echo "[entrypoint] downloading sd_xl_refiner_1.0.safetensors..."
-    curl -L \
-      -o "${CHECKPOINT_DIR}/sd_xl_refiner_1.0.safetensors" \
-      "https://huggingface.co/stabilityai/stable-diffusion-xl-refiner-1.0/resolve/main/sd_xl_refiner_1.0.safetensors"
-  else
-    echo "[entrypoint] sd_xl_refiner_1.0.safetensors already exists"
-  fi
-}
-
-download_sdxl
+echo "[entrypoint] fetching models..."
+/opt/worker/fetch_models.sh
 
 echo "[entrypoint] locating comfyui-api..."
 
