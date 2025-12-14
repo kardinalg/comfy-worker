@@ -15,9 +15,9 @@ from datetime import datetime
 API_BASE = os.environ["API_BASE"]
 API_TOKEN = os.environ["API_TOKEN"]
 
-GET_TASK_URL      = f"{API_BASE}/worker/getTask"
-UPDATE_TASK_URL   = f"{API_BASE}/worker/updateTask"
-UPLOAD_IMAGE_URL  = f"{API_BASE}/worker/uploadImage"
+GET_TASK_URL      = f"{API_BASE}/index.php?r=worker/getTask"
+UPDATE_TASK_URL   = f"{API_BASE}/index.php?r=worker/updateTask"
+UPLOAD_IMAGE_URL  = f"{API_BASE}/index.php?r=worker/uploadImage"
 
 COMFY_SERVER = "127.0.0.1:3000"            # ComfyUI на Salad-сервері
 COMFY_HTTP   = f"http://{COMFY_SERVER}"
