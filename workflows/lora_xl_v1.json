@@ -50,7 +50,7 @@
       "add_noise": "enable",
       "noise_seed": param_seed,
       "steps": param_steps,
-      "cfg": 6.5,
+      "cfg": 4.5,
       "sampler_name": "dpmpp_2m_sde_gpu",
       "scheduler": "karras",
       "start_at_step": 0,
