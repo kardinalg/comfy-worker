@@ -3,7 +3,7 @@ set -e
 
 # ========= CONFIG =========
 MODEL_DIR="/opt/ComfyUI/models/checkpoints"
-MODEL_ID="119226"                     # Copax Cute XL
+MODEL_ID="388349"                     # Copax Cute XL
 MODEL_NAME="copax_cute_xl.safetensors"
 CIVITAI_API_KEY="${CIVITAI_API_KEY:-}"
 
@@ -62,4 +62,4 @@ download_sdxl() {
   fi
 }
 
-download_sdxl
+#download_sdxl

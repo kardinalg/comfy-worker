@@ -78,6 +78,7 @@ else
 fi
 
 echo "[entrypoint] fetching models..."
+chmod +x /opt/worker/fetch_models.sh 2>/dev/null || true
 /opt/worker/fetch_models.sh
 
 echo "[entrypoint] locating comfyui-api..."
