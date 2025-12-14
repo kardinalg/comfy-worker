@@ -50,7 +50,7 @@ if [ ! -d "${WORK_DIR}/.git" ]; then
 else
   cd "${WORK_DIR}"
   git fetch origin "${WORKER_BRANCH}"
-  git checkout "${WORKER_BRANCH}"
+  git checkout -f "${WORKER_BRANCH}"
   git pull origin "${WORKER_BRANCH}"
 fi
 
