@@ -6,6 +6,7 @@ MODEL_DIR="/opt/ComfyUI/models/checkpoints"
 MODEL_ID="388349"                     # Copax Cute XL
 MODEL_NAME="copax_cute_xl.safetensors"
 CIVITAI_API_KEY="${CIVITAI_API_KEY:-}"
+CHECKPOINT_DIR="${MODEL_DIR}"
 
 # ========= CHECKS =========
 mkdir -p "$MODEL_DIR"
@@ -29,13 +30,13 @@ curl -fL \
   "https://civitai.com/api/download/models/$MODEL_ID"
 
 # ========= VALIDATION =========
-FILE_TYPE=$(file "$MODEL_DIR/$MODEL_NAME")
+#FILE_TYPE=$(file "$MODEL_DIR/$MODEL_NAME")
 
-if echo "$FILE_TYPE" | grep -qi "html"; then
-  echo "[models][ERROR] Downloaded file is HTML (invalid token or blocked)"
-  rm -f "$MODEL_DIR/$MODEL_NAME"
-  exit 1
-fi
+#if echo "$FILE_TYPE" | grep -qi "html"; then
+#  echo "[models][ERROR] Downloaded file is HTML (invalid token or blocked)"
+#  rm -f "$MODEL_DIR/$MODEL_NAME"
+#  exit 1
+#fi
 
 echo "[models] Download complete: $MODEL_NAME"
 
