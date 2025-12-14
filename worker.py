@@ -139,28 +139,22 @@ def queue_prompt_to_comfy(workflow: dict, client_id: str) -> str:
     return prompt_id
 
 def run_workflow_via_comfy_api(workflow: dict, client_id: str) -> dict:
-    """
-    Відправляємо workflow в comfyui-api (/prompt) і відразу
-    отримуємо результат у форматі comfyui-api:
-      {
-        "id": "...",
-        "prompt": {...},
-        "images": [ ... base64 ... ]
-      }
-    """
     url = f"{COMFY_HTTP}/prompt"
     payload = {
         "prompt": workflow,
         "client_id": client_id,
     }
     r = requests.post(url, json=payload, timeout=(5, 600))
-    r.raise_for_status()
-    data = r.json()
 
-    # Перевіримо, що це саме comfyui-api формат
+    if r.status_code >= 400:
+        # тут побачимо справжню причину 500
+        raise RuntimeError(
+            f"comfyui-api помилка {r.status_code}: {r.text}"
+        )
+
+    data = r.json()
     if "images" not in data:
         raise RuntimeError(f"Несподіваний формат відповіді comfyui-api: {data}")
-
     return data
 
 
