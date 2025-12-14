@@ -8,6 +8,7 @@ import json
 import uuid
 import traceback
 import requests
+import base64
 from datetime import datetime
 
 # ------------------ Налаштування ------------------
@@ -137,6 +138,31 @@ def queue_prompt_to_comfy(workflow: dict, client_id: str) -> str:
         raise RuntimeError(f"ComfyUI не повернув prompt_id: {data}")
     return prompt_id
 
+def run_workflow_via_comfy_api(workflow: dict, client_id: str) -> dict:
+    """
+    Відправляємо workflow в comfyui-api (/prompt) і відразу
+    отримуємо результат у форматі comfyui-api:
+      {
+        "id": "...",
+        "prompt": {...},
+        "images": [ ... base64 ... ]
+      }
+    """
+    url = f"{COMFY_HTTP}/prompt"
+    payload = {
+        "prompt": workflow,
+        "client_id": client_id,
+    }
+    r = requests.post(url, json=payload, timeout=(5, 600))
+    r.raise_for_status()
+    data = r.json()
+
+    # Перевіримо, що це саме comfyui-api формат
+    if "images" not in data:
+        raise RuntimeError(f"Несподіваний формат відповіді comfyui-api: {data}")
+
+    return data
+
 
 def wait_for_result(prompt_id: str, timeout_sec: int = 600) -> dict:
     """
@@ -207,22 +233,57 @@ def generate_with_comfy(workflow_key: str, payload: dict) -> str:
     workflow = build_workflow_from_payload(workflow_key, payload)
 
     # 2) відправляємо в ComfyUI
-    prompt_id = queue_prompt_to_comfy(workflow, client_id)
-    log(f"ComfyUI prompt_id={prompt_id}")
+    # prompt_id = queue_prompt_to_comfy(workflow, client_id)
+    # log(f"ComfyUI prompt_id={prompt_id}")
 
-    # 3) чекаємо завершення
-    history = wait_for_result(prompt_id)
+    # # 3) чекаємо завершення
+    # history = wait_for_result(prompt_id)
 
-    # 4) беремо перше зображення
-    img_info = extract_first_image_info(history)
-    log(f"Отримано файл з ComfyUI: {img_info}")
+    # # 4) беремо перше зображення
+    # img_info = extract_first_image_info(history)
+    # log(f"Отримано файл з ComfyUI: {img_info}")
 
-    # 5) качаємо в tmp
-    ext = os.path.splitext(img_info["filename"])[1] or ".png"
-    tmp_name = f"comfy_{prompt_id[:8]}{ext}"
+    # # 5) качаємо в tmp
+    # ext = os.path.splitext(img_info["filename"])[1] or ".png"
+    # tmp_name = f"comfy_{prompt_id[:8]}{ext}"
+    # local_path = os.path.join(TMP_DIR, tmp_name)
+    # download_image_from_comfy(img_info, local_path)
+
+    # 2) запускаємо workflow через comfyui-api
+    result = run_workflow_via_comfy_api(workflow, client_id)
+    task_id = result.get("id")
+    log(f"comfyui-api task_id={task_id}")
+
+    images = result.get("images") or []
+    if not images:
+        raise RuntimeError(f"comfyui-api не повернув images: {result}")
+
+    # 3) беремо перше зображення
+    first = images[0]
+
+    # comfyui-api може повернути або чистий base64-рядок,
+    # або dict з полями типу {"image": "...", "filename": "..."}
+    if isinstance(first, dict):
+        b64_data = first.get("image") or first.get("data")
+        filename = first.get("filename") or f"{task_id}.png"
+    else:
+        b64_data = first
+        filename = f"{task_id}.png"
+
+    if not b64_data:
+        raise RuntimeError(f"Немає base64 даних у images[0]: {first}")
+
+    # 4) зберігаємо в TMP_DIR
+    ext = os.path.splitext(filename)[1] or ".png"
+    safe_id = (task_id or "comfy")[:8]
+    tmp_name = f"comfy_{safe_id}{ext}"
     local_path = os.path.join(TMP_DIR, tmp_name)
-    download_image_from_comfy(img_info, local_path)
 
+    os.makedirs(TMP_DIR, exist_ok=True)
+    with open(local_path, "wb") as f:
+        f.write(base64.b64decode(b64_data))
+
+    log(f"Зображення збережено локально: {local_path}")
     return local_path
 
 
