@@ -54,7 +54,7 @@
       "sampler_name": "dpmpp_2m_sde_gpu",
       "scheduler": "karras",
       "start_at_step": 0,
-      "end_at_step": 20,
+      "end_at_step": param_steps,
       "return_with_leftover_noise": "enable",
       "model": [
         "4",
