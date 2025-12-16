@@ -751,7 +751,7 @@
     "inputs": {
       "lr": 2,
       "max_grad_norm": 0,
-      "prodigy_steps": params_steps,
+      "prodigy_steps": param_steps,
       "d0": 0.000001,
       "d_coef": 2,
       "split_groups": true,
