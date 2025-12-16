@@ -123,10 +123,10 @@ if [ ! -d "/opt/ComfyUI/custom_nodes/ComfyUI-FluxTrainer/.git" ]; then
   cd /opt/ComfyUI/custom_nodes
   git clone https://github.com/rgthree/rgthree-comfy.git
 
-  cd /opt/ComfyUI/custom_nodes
-  git clone https://github.com/yolain/ComfyUI-Easy-Use.git
-  cd ComfyUI-Easy-Use
-  pip install -r requirements.txt || true
+  #cd /opt/ComfyUI/custom_nodes
+  #git clone https://github.com/yolain/ComfyUI-Easy-Use.git
+  #cd ComfyUI-Easy-Use
+  #pip install -r requirements.txt || true
 
   cd /opt/ComfyUI/custom_nodes
   git clone https://github.com/whitmell/ComfyUI-RvTools.git

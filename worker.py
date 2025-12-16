@@ -227,7 +227,7 @@ def _download_one(session: requests.Session, name: str) -> str:
 
 
 def download_training_files(file_prefix, names, max_workers=16, retries=5):
-"""
+    """
     Паралельне скачування з обмеженням max_workers.
     Повертає (ok_paths, failed_names).
     """
