@@ -104,7 +104,6 @@ def upload_image(task_id, path):
 def upload_lora_chunked(
     file_path: str,
     lora_name: str,
-    server_base: str,
     chunk_size: int = 2 * 1024 * 1024,
     max_retries: int = 8,
 ):
