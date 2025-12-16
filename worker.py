@@ -607,12 +607,14 @@ def handle_lora_train_task(task):
     log(f"[LoRA #{tid}] Файл знайдено")
     # 5) Upload
     update_task(tid, "running", payload_update={"stage": "upload_trained_model", "comfy_id": result.get("id")})
-    og(f"[LoRA #{tid}] Файл завантажено")
+    
     upload_samples(tid)
+    log(f"[LoRA #{tid}] Samples завантажено")
     up = upload_lora_chunked(
         file_path=out_model_path,
         lora_name=lora_name,
     )
+    log(f"[LoRA #{tid}] Файл завантажено")
 
     payload_update = {
         "note": "LoRA training done via comfyui-api and uploaded",
