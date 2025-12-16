@@ -210,16 +210,75 @@ def download_training_file(name: str) -> str:
     log(f"Файл {name} збережено в {local_path}")
     return local_path
 
+def _download_one(session: requests.Session, name: str) -> str:
+    params = {"token": API_TOKEN, "name": name}
 
-def download_training_files(file_prefix, names):
+    local_path = os.path.join(TRAIN_DATA_DIR, name)
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+    with session.post(DOWNLOAD_FILE_URL, params=params, timeout=600, stream=True) as r:
+        r.raise_for_status()
+        with open(local_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 1024):  # 1MB
+                if chunk:
+                    f.write(chunk)
+
+    return local_path
+
+
+def download_training_files(file_prefix, names, max_workers=16, retries=5):
+"""
+    Паралельне скачування з обмеженням max_workers.
+    Повертає (ok_paths, failed_names).
     """
-    Пробігаємось по списку імен файлів, качаємо всі.
-    """
-    local_paths = []
-    for name in names:
-        p = download_training_file(file_prefix + name)
-        local_paths.append(p)
-    return local_paths
+    to_download = [file_prefix + n for n in names]
+    ok_paths = []
+    failed = []
+
+    # ВАЖЛИВО: Session не thread-safe, тому робимо по сесії на потік через initializer-лайт.
+    # Найпростіше — створювати session всередині задачі (трохи дорожче), або тримати thread-local.
+    import threading
+    tls = threading.local()
+
+    def task(full_name: str) -> str:
+        if not hasattr(tls, "session"):
+            tls.session = requests.Session()
+
+        last_err = None
+        for attempt in range(retries):
+            try:
+                return _download_one(tls.session, full_name)
+            except requests.HTTPError as e:
+                status = getattr(e.response, "status_code", None)
+                # retry на rate limit / тимчасові серверні
+                if status in (429, 500, 502, 503, 504):
+                    sleep_s = min(60, (2 ** attempt) + random.random())
+                    time.sleep(sleep_s)
+                    last_err = e
+                    continue
+                raise
+            except (requests.ConnectionError, requests.Timeout) as e:
+                sleep_s = min(60, (2 ** attempt) + random.random())
+                time.sleep(sleep_s)
+                last_err = e
+                continue
+
+        raise RuntimeError(f"Failed after {retries} retries: {full_name}. Last error: {last_err}")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futures = {ex.submit(task, n): n for n in to_download}
+        for fut in as_completed(futures):
+            n = futures[fut]
+            try:
+                p = fut.result()
+                ok_paths.append(p)
+                # якщо хочеш прогрес:
+                # log(f"OK: {n}")
+            except Exception as e:
+                failed.append(n)
+                log(f"FAIL: {n}: {e}")
+
+    return ok_paths, failed
 
 
 # ------------------ ComfyUI інтеграція ------------------
@@ -496,8 +555,9 @@ def handle_lora_train_task(task):
     file_prefix = payload.get("files_prefix")
     if file_names:
         log(f"[LoRA #{tid}] (fallback) Скачуємо файли: {file_names}")
-        data_paths = download_training_files(file_prefix, file_names)
-        payload["data_paths"] = data_paths  # якщо comfy/workflow це читає
+        #data_paths = 
+        download_training_files(file_prefix, file_names)
+        #payload["data_paths"] = data_paths  # якщо comfy/workflow це читає
     else:
         log(f"[LoRA #{tid}] payload.files порожній — припускаю, що dataset вже на диску/налаштований у workflow.")
 
