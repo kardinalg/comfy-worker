@@ -180,7 +180,7 @@
       "font_size": 32,
       "font_color": "white",
       "label_color": "black",
-      "font": "default",
+      "font": "FreeMono.ttf",
       "text": [
         "79",
         0
@@ -218,7 +218,7 @@
       "font_size": 32,
       "font_color": "white",
       "label_color": "black",
-      "font": "default",
+      "font": "FreeMono.ttf",
       "text": [
         "81",
         0
@@ -270,7 +270,7 @@
       "font_size": 32,
       "font_color": "white",
       "label_color": "black",
-      "font": "default",
+      "font": "FreeMono.ttf",
       "text": [
         "82",
         0
@@ -308,7 +308,7 @@
       "font_size": 32,
       "font_color": "white",
       "label_color": "black",
-      "font": "default",
+      "font": "FreeMono.ttf",
       "text": [
         "84",
         0
@@ -529,7 +529,7 @@
       "font_size": 32,
       "font_color": "white",
       "label_color": "black",
-      "font": "default",
+      "font": "FreeMono.ttf",
       "text": [
         "133",
         0

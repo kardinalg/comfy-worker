@@ -57,14 +57,14 @@ download_sdxl() {
     echo "[entrypoint] sd_xl_base_1.0.safetensors already exists"
   fi
 
-  if [ ! -f "${CHECKPOINT_DIR}/sd_xl_refiner_1.0.safetensors" ]; then
-    echo "[entrypoint] downloading sd_xl_refiner_1.0.safetensors..."
-    curl -L \
-      -o "${CHECKPOINT_DIR}/sd_xl_refiner_1.0.safetensors" \
-      "https://huggingface.co/stabilityai/stable-diffusion-xl-refiner-1.0/resolve/main/sd_xl_refiner_1.0.safetensors"
-  else
-    echo "[entrypoint] sd_xl_refiner_1.0.safetensors already exists"
-  fi
+  #if [ ! -f "${CHECKPOINT_DIR}/sd_xl_refiner_1.0.safetensors" ]; then
+  #  echo "[entrypoint] downloading sd_xl_refiner_1.0.safetensors..."
+  #  curl -L \
+  #    -o "${CHECKPOINT_DIR}/sd_xl_refiner_1.0.safetensors" \
+  #    "https://huggingface.co/stabilityai/stable-diffusion-xl-refiner-1.0/resolve/main/sd_xl_refiner_1.0.safetensors"
+  #else
+  #  echo "[entrypoint] sd_xl_refiner_1.0.safetensors already exists"
+  #fi
 }
 
 #download_sdxl
