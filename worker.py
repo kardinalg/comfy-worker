@@ -531,7 +531,7 @@ def handle_lora_train_task(task):
 
     # === де comfy зберігає модель локально ===
     # Рекомендую НЕ /opt/output, а volume, але лишаю як ти написав
-    out_model_path = f"/opt/output/{lora_name}.safetensors"
+    out_model_path = f"/opt/output/{lora_name}.safetensors_rank16_fp16.safetensors"
 
     # === параметри upload ===
     character_folder = payload.get("character_name") or payload.get("character_id") or lora_name

@@ -641,7 +641,7 @@
   },
   "144": {
     "inputs": {
-      "output_name": "param_character_id.safetensors",
+      "output_name": "param_lora_name.safetensors",
       "output_dir": "/opt/output/",
       "network_dim": 16,
       "network_alpha": 16,
@@ -658,7 +658,7 @@
       "train_text_encoder": "disabled",
       "clip_l_lr": 0,
       "clip_g_lr": 0,
-      "sample_prompts_pos": "param_test_promt",
+      "sample_prompts_pos": "param_prompt",
       "sample_prompts_neg": "param_negative_prompt",
       "gradient_checkpointing": "disabled",
       "additional_args": "",
