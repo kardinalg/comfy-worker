@@ -593,7 +593,7 @@
       "caption_dropout_rate": 0,
       "alpha_mask": false,
       "reset_on_queue": false,
-      "caption_extension": ""
+      "caption_extension": "txt"
     },
     "class_type": "TrainDatasetGeneralConfig",
     "_meta": {
