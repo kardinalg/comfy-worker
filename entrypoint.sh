@@ -96,6 +96,44 @@ else
   exit 1
 fi
 
+if [ ! -d "/opt/ComfyUI/custom_nodes/ComfyUI-FluxTrainer/.git" ]; then
+  pip uninstall -y opencv-python-headless
+  pip install "opencv-python-headless<4.12"
+
+  cd /opt/ComfyUI/custom_nodes
+  git clone https://github.com/kijai/ComfyUI-FluxTrainer.git
+
+  # Залежності
+  cd ComfyUI-FluxTrainer
+  pip install -r requirements.txt
+
+
+  cd /opt/ComfyUI/custom_nodes
+  git clone https://github.com/kijai/ComfyUI-KJNodes.git
+  # іноді треба:
+  cd ComfyUI-KJNodes
+  pip install -r requirements.txt || true
+
+
+  cd /opt/ComfyUI/custom_nodes
+  git clone https://github.com/pythongosssss/ComfyUI-WD14-Tagger.git
+  cd ComfyUI-WD14-Tagger
+  pip install -r requirements.txt
+
+  cd /opt/ComfyUI/custom_nodes
+  git clone https://github.com/rgthree/rgthree-comfy.git
+
+  cd /opt/ComfyUI/custom_nodes
+  git clone https://github.com/yolain/ComfyUI-Easy-Use.git
+  cd ComfyUI-Easy-Use
+  pip install -r requirements.txt || true
+
+  cd /opt/ComfyUI/custom_nodes
+  git clone https://github.com/whitmell/ComfyUI-RvTools.git
+fi
+
+mkdir -p /opt/output
+
 echo "[entrypoint] starting comfyui-api at ${COMFY_API_BIN}..."
 "${COMFY_API_BIN}" &
 

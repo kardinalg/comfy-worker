@@ -9,6 +9,8 @@ import uuid
 import traceback
 import requests
 import base64
+import subprocess
+import hashlib
 from datetime import datetime
 
 # ------------------ Налаштування ------------------
@@ -19,6 +21,9 @@ API_TOKEN = os.environ["API_TOKEN"]
 GET_TASK_URL      = f"{API_BASE}/index.php?r=worker/getTask"
 UPDATE_TASK_URL   = f"{API_BASE}/index.php?r=worker/updateTask"
 UPLOAD_IMAGE_URL  = f"{API_BASE}/index.php?r=worker/uploadImage"
+UPLOAD_LORA_INIT  = f"{API_BASE}/index.php?r=lora/uplodaLoraInit"
+UPLOAD_LORA_CHUNK  = f"{API_BASE}/index.php?r=lora/uplodaLoraChunk"
+UPLOAD_LORA_FINAL  = f"{API_BASE}/index.php?r=lora/uplodaLoraFinal"
 
 COMFY_SERVER = "127.0.0.1:3000"            # ComfyUI на Salad-сервері
 COMFY_HTTP   = f"http://{COMFY_SERVER}"
@@ -29,8 +34,23 @@ TMP_DIR = "/tmp/comfy_worker"
 WORKFLOWS_DIR = "/opt/comfy_workflows"
 os.makedirs(TMP_DIR, exist_ok=True)
 
+TRAIN_DATA_DIR = "/opt/lora_train_data"
+TRAIN_OUTPUT_DIR = "/opt/lora_train_output"
+os.makedirs(TRAIN_DATA_DIR, exist_ok=True)
+os.makedirs(TRAIN_OUTPUT_DIR, exist_ok=True)
+DOWNLOAD_FILE_URL = f"{API_BASE}/index.php?r=worker/getFile"
+
 # ------------------ Сервісні функції ------------------
 
+def sha256_file(path, chunk=1024*1024):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while True:
+            b = f.read(chunk)
+            if not b:
+                break
+            h.update(b)
+    return h.hexdigest()
 
 def log(msg: str):
     ts = datetime.now().strftime("%H:%M:%S")
@@ -80,6 +100,127 @@ def upload_image(task_id, path):
     finally:
         files["file"].close()
 
+def upload_lora_chunked(
+    file_path: str,
+    lora_name: str,
+    server_base: str,
+    chunk_size: int = 2 * 1024 * 1024,
+    max_retries: int = 8,
+):
+    total_size = os.path.getsize(file_path)
+    file_hash = sha256_file(file_path)
+
+    headers = {"X-Auth-Token": API_TOKEN}
+
+    # 1) init / resume
+    r = requests.post(UPLOAD_LORA_INIT, headers=headers, data={
+        "lora_name": lora_name,
+        "total_size": str(total_size),
+        "sha256": file_hash,
+    }, timeout=30)
+    r.raise_for_status()
+    j = r.json()
+    if j.get("status") != "ok":
+        raise RuntimeError(j)
+
+    uploaded = int(j["uploaded_bytes"])
+    print(f"[upload] resume from {uploaded}/{total_size}")
+
+    # 2) upload chunks append-only
+    with open(file_path, "rb") as f:
+        f.seek(uploaded)
+        offset = uploaded
+
+        while offset < total_size:
+            data = f.read(chunk_size)
+            if not data:
+                break
+
+            # retry loop
+            attempt = 0
+            while True:
+                try:
+                    rr = requests.post(
+                        UPLOAD_LORA_CHUNK,
+                        headers={**headers, "Content-Type": "application/octet-stream"},
+                        params={"lora_name": lora_name, "offset": str(offset)},
+                        data=data,
+                        timeout=120,
+                    )
+                    # 409 = offset mismatch -> повторно init і продовжити з correct offset
+                    if rr.status_code == 409:
+                        jj = rr.json()
+                        offset = int(jj.get("expected_offset", offset))
+                        f.seek(offset)
+                        print(f"[upload] offset mismatch, jump to {offset}")
+                        data = f.read(chunk_size)
+                        continue
+
+                    rr.raise_for_status()
+                    jj = rr.json()
+                    if jj.get("status") != "ok":
+                        raise RuntimeError(jj)
+
+                    offset = int(jj["uploaded_bytes"])
+                    print(f"[upload] {offset}/{total_size}")
+                    break
+                except Exception as e:
+                    attempt += 1
+                    if attempt > max_retries:
+                        raise
+                    sleep = min(2 ** attempt, 30)
+                    print(f"[upload] retry {attempt}/{max_retries} after {sleep}s: {e}")
+                    time.sleep(sleep)
+
+    # 3) finalize
+    rf = requests.post(UPLOAD_LORA_FINAL, headers=headers, data={
+        "lora_name": lora_name,
+        "total_size": str(total_size),
+        "sha256": file_hash,
+    }, timeout=60)
+    rf.raise_for_status()
+    jf = rf.json()
+    if jf.get("status") != "ok":
+        raise RuntimeError(jf)
+
+    print(f"[upload] DONE: {jf.get('path')} size={jf.get('size')}")
+    return jf
+
+# ------------------ Lora train
+def download_training_file(name: str) -> str:
+    params = {
+        "token": API_TOKEN,
+        "name": name,
+    }
+    try:
+        r = requests.post(DOWNLOAD_FILE_URL, params=params, timeout=600, stream=True)
+        r.raise_for_status()
+    except Exception as e:
+        raise RuntimeError(f"Не вдалося завантажити файл {name}: {e}")
+
+    local_path = os.path.join(TRAIN_DATA_DIR, name)
+    # на всяк випадок — створимо піддиректорії, якщо в імені є шлях
+    os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+    with open(local_path, "wb") as f:
+        for chunk in r.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+
+    log(f"Файл {name} збережено в {local_path}")
+    return local_path
+
+
+def download_training_files(file_prefix, names):
+    """
+    Пробігаємось по списку імен файлів, качаємо всі.
+    """
+    local_paths = []
+    for name in names:
+        p = download_training_file(file_prefix + name)
+        local_paths.append(p)
+    return local_paths
+
 
 # ------------------ ComfyUI інтеграція ------------------
 # API: /prompt, /history/{id}, /view?filename=...&subfolder=...&type=... :contentReference[oaicite:0]{index=0}
@@ -119,7 +260,6 @@ def build_workflow_from_payload(workflow_key: str, payload: dict) -> dict:
 
     return workflow
 
-
 def queue_prompt_to_comfy(workflow: dict, client_id: str) -> str:
     """
     Відправляємо workflow в ComfyUI через /prompt.
@@ -137,6 +277,31 @@ def queue_prompt_to_comfy(workflow: dict, client_id: str) -> str:
     if not prompt_id:
         raise RuntimeError(f"ComfyUI не повернув prompt_id: {data}")
     return prompt_id
+
+def run_comfy_training_workflow(workflow_key: str, payload: dict, timeout_sec: int = 7200) -> dict:
+    client_id = str(uuid.uuid4())
+
+    workflow = build_workflow_from_payload(workflow_key, payload)
+    url = f"{COMFY_HTTP}/prompt"
+
+    body = {
+        "prompt": workflow,
+        # Можеш задати свій id для трейсінгу:
+        "id": str(uuid.uuid4()),
+    }
+
+    # timeout = (connect_timeout, read_timeout)
+    r = requests.post(url, json=body, timeout=(5, timeout_sec))
+
+    if r.status_code >= 400:
+        raise RuntimeError(f"comfyui-api помилка {r.status_code}: {r.text}")
+
+    data = r.json()
+    # Для тренування тобі не обов'язково потрібні images,
+    # ComfyUI workflow може просто зберегти LoRA на диск.
+    return data
+
+
 
 def run_workflow_via_comfy_api(workflow: dict, client_id: str) -> dict:
     url = f"{COMFY_HTTP}/prompt"
@@ -282,7 +447,89 @@ def generate_with_comfy(workflow_key: str, payload: dict) -> str:
 
 
 # ------------------ Головний цикл ------------------
+def wait_for_file(path: str, timeout_sec: int = 300, min_size: int = 10_000_000):
+    """Чекає появи файлу і щоб він був не пустий/не битий (min_size)."""
+    t0 = time.time()
+    while time.time() - t0 < timeout_sec:
+        if os.path.exists(path):
+            try:
+                if os.path.getsize(path) >= min_size:
+                    return True
+            except OSError:
+                pass
+        time.sleep(2)
+    return False
 
+def handle_lora_train_task(task):
+    tid = task["id"]
+    workflow_key = task["workflow_key"]
+    payload = task.get("payload") or {}
+
+    lora_name = payload.get("lora_name")
+    if not lora_name:
+        raise RuntimeError("payload.lora_name обовʼязковий")
+
+    # === де comfy зберігає модель локально ===
+    # Рекомендую НЕ /opt/output, а volume, але лишаю як ти написав
+    out_model_path = f"/opt/output/{lora_name}.safetensors"
+
+    # === параметри upload ===
+    character_folder = payload.get("character_name") or payload.get("character_id") or lora_name
+
+    # 1) Якщо файл вже є — НЕ тренуємо, одразу upload
+    if os.path.exists(out_model_path) and os.path.getsize(out_model_path) > 10_000_000:
+        log(f"[LoRA #{tid}] Файл вже існує: {out_model_path} — пропускаю тренування, роблю upload.")
+        update_task(tid, "running", payload_update={"stage": "upload_existing_model"})
+        upload_lora_chunked(
+            file_path=out_model_path,
+            lora_name=lora_name,
+        )
+        update_task(tid, "done", None, {
+            "note": "LoRA uploaded (training skipped, file existed)",
+            "lora_model_local": out_model_path,
+        })
+        log(f"✅ LoRA-задача #{tid} завершена (skip train), upload: {up.get('path')}")
+        return
+
+    # 2) Старий шлях з zip/файлами — лишаю як optional fallback
+    file_names = payload.get("files") or []
+    file_prefix = payload.get("files_prefix")
+    if file_names:
+        log(f"[LoRA #{tid}] (fallback) Скачуємо файли: {file_names}")
+        data_paths = download_training_files(file_prefix, file_names)
+        payload["data_paths"] = data_paths  # якщо comfy/workflow це читає
+    else:
+        log(f"[LoRA #{tid}] payload.files порожній — припускаю, що dataset вже на диску/налаштований у workflow.")
+
+    # 3) Запускаємо comfy training
+    log(f"[LoRA #{tid}] Старт тренування через Comfy, workflow={workflow_key}")
+    update_task(tid, "running", payload_update={"stage": "comfy_training_started"})
+
+    result = run_comfy_training_workflow(workflow_key, payload, timeout_sec=7200)
+
+    # 4) Чекаємо щоб файл реально зʼявився
+    if not wait_for_file(out_model_path, timeout_sec=600, min_size=1_000_000):
+        raise RuntimeError(f"[LoRA #{tid}] Comfy завершився, але файл не знайдено/замалий: {out_model_path}")
+
+    # 5) Upload
+    update_task(tid, "running", payload_update={"stage": "upload_trained_model", "comfy_id": result.get("id")})
+
+    up = upload_lora_chunked(
+        file_path=out_model_path,
+        lora_name=lora_name,
+    )
+
+    payload_update = {
+        "note": "LoRA training done via comfyui-api and uploaded",
+        "comfy_id": result.get("id"),
+        "stats": result.get("stats"),
+        "lora_model_local": out_model_path,
+        "lora_model_remote": up.get("path"),
+        "remote_size": up.get("size"),
+    }
+
+    update_task(tid, "done", None, payload_update)
+    log(f"✅ LoRA-задача #{tid} завершена, модель: {out_model_path} → {up.get('path')}")
 
 def main():
     log("Воркер запущено. Очікуємо задачі...")
@@ -309,6 +556,9 @@ def main():
                     log(f"✅ Завершено задачу #{tid}, result={remote_path}")
                 else:
                     update_task(tid, "failed", "Upload failed")
+            elif ttype == "lora_train":
+                # 🔥 новий тип задачі
+                handle_lora_train_task(task)
             else:
                 update_task(tid, "failed", f"Невідомий тип задачі: {ttype}")
 
