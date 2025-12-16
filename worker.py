@@ -23,9 +23,9 @@ GET_TASK_URL      = f"{API_BASE}/index.php?r=worker/getTask"
 UPDATE_TASK_URL   = f"{API_BASE}/index.php?r=worker/updateTask"
 UPLOAD_IMAGE_URL  = f"{API_BASE}/index.php?r=worker/uploadImage"
 UPLOAD_FILE_URL   = f"{API_BASE}/index.php?r=worker/uploadFile"
-UPLOAD_LORA_INIT  = f"{API_BASE}/index.php?r=lora/uplodaLoraInit"
-UPLOAD_LORA_CHUNK  = f"{API_BASE}/index.php?r=lora/uplodaLoraChunk"
-UPLOAD_LORA_FINAL  = f"{API_BASE}/index.php?r=lora/uplodaLoraFinal"
+UPLOAD_LORA_INIT  = f"{API_BASE}/index.php?r=lora/uploadLoraInit"
+UPLOAD_LORA_CHUNK  = f"{API_BASE}/index.php?r=lora/uploadLoraChunk"
+UPLOAD_LORA_FINAL  = f"{API_BASE}/index.php?r=lora/uploadLoraFinal"
 
 COMFY_SERVER = "127.0.0.1:3000"            # ComfyUI на Salad-сервері
 COMFY_HTTP   = f"http://{COMFY_SERVER}"
@@ -599,12 +599,15 @@ def handle_lora_train_task(task):
 
     result = run_comfy_training_workflow(workflow_key, payload, timeout_sec=7200)
 
+    log(f"[LoRA #{tid}] Тренування завершене шукаю файл {out_model_path}")
     # 4) Чекаємо щоб файл реально зʼявився
     if not wait_for_file(out_model_path, timeout_sec=600, min_size=1_000_000):
         raise RuntimeError(f"[LoRA #{tid}] Comfy завершився, але файл не знайдено/замалий: {out_model_path}")
 
+    log(f"[LoRA #{tid}] Файл знайдено")
     # 5) Upload
     update_task(tid, "running", payload_update={"stage": "upload_trained_model", "comfy_id": result.get("id")})
+    og(f"[LoRA #{tid}] Файл завантажено")
     upload_samples(tid)
     up = upload_lora_chunked(
         file_path=out_model_path,
