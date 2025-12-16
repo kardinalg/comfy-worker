@@ -571,7 +571,7 @@ def handle_lora_train_task(task):
         log(f"[LoRA #{tid}] Файл вже існує: {out_model_path} — пропускаю тренування, роблю upload.")
         update_task(tid, "running", payload_update={"stage": "upload_existing_model"})
         upload_samples(tid)
-        upload_lora_chunked(
+        up = upload_lora_chunked(
             file_path=out_model_path,
             lora_name=lora_name,
         )
