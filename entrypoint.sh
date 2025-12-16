@@ -100,6 +100,9 @@ if [ ! -d "/opt/ComfyUI/custom_nodes/ComfyUI-FluxTrainer/.git" ]; then
   pip uninstall -y opencv-python-headless
   pip install "opencv-python-headless<4.12"
 
+  apt-get update
+  apt-get install -y libgl1 libglib2.0-0
+
   cd /opt/ComfyUI/custom_nodes
   git clone https://github.com/kijai/ComfyUI-FluxTrainer.git
 
