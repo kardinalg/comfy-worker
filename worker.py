@@ -22,6 +22,7 @@ API_TOKEN = os.environ["API_TOKEN"]
 GET_TASK_URL      = f"{API_BASE}/index.php?r=worker/getTask"
 UPDATE_TASK_URL   = f"{API_BASE}/index.php?r=worker/updateTask"
 UPLOAD_IMAGE_URL  = f"{API_BASE}/index.php?r=worker/uploadImage"
+UPLOAD_FILE_URL   = f"{API_BASE}/index.php?r=worker/uploadFile"
 UPLOAD_LORA_INIT  = f"{API_BASE}/index.php?r=lora/uplodaLoraInit"
 UPLOAD_LORA_CHUNK  = f"{API_BASE}/index.php?r=lora/uplodaLoraChunk"
 UPLOAD_LORA_FINAL  = f"{API_BASE}/index.php?r=lora/uplodaLoraFinal"
@@ -86,6 +87,19 @@ def update_task(task_id, status, error=None, payload_update=None):
     except Exception as e:
         log(f"Не вдалося оновити статус задачі {task_id}: {e}")
 
+def upload_file(task_id, path):
+    files = {"file": open(path, "rb")}
+    data = {"token": API_TOKEN, "task_id": task_id}
+    try:
+        r = requests.post(UPLOAD_FILE_URL, data=data, files=files, timeout=120)
+        r.raise_for_status()
+        resp = r.json()
+        return None
+    except Exception as e:
+        log(f"Помилка аплоаду файлу {path}: {e}")
+        return None
+    finally:
+        files["file"].close()
 
 def upload_image(task_id, path):
     files = {"file": open(path, "rb")}
@@ -100,6 +114,23 @@ def upload_image(task_id, path):
         return None
     finally:
         files["file"].close()
+
+def upload_samples(task_id, samples_dir="/opt/output/sample"):
+    if not os.path.isdir(samples_dir):
+        print(f"[INFO] samples dir not found: {samples_dir}")
+        return
+
+    for filename in os.listdir(samples_dir):
+        file_path = os.path.join(samples_dir, filename)
+
+        if not os.path.isfile(file_path):
+            continue
+
+        try:
+            upload_file(task_id, file_path)
+            print(f"[OK] uploaded: {file_path}")
+        except Exception as e:
+            print(f"[ERROR] failed to upload {file_path}: {e}")
 
 def upload_lora_chunked(
     file_path: str,
@@ -539,6 +570,7 @@ def handle_lora_train_task(task):
     if os.path.exists(out_model_path) and os.path.getsize(out_model_path) > 10_000_000:
         log(f"[LoRA #{tid}] Файл вже існує: {out_model_path} — пропускаю тренування, роблю upload.")
         update_task(tid, "running", payload_update={"stage": "upload_existing_model"})
+        upload_samples(tid)
         upload_lora_chunked(
             file_path=out_model_path,
             lora_name=lora_name,
@@ -573,7 +605,7 @@ def handle_lora_train_task(task):
 
     # 5) Upload
     update_task(tid, "running", payload_update={"stage": "upload_trained_model", "comfy_id": result.get("id")})
-
+    upload_samples(tid)
     up = upload_lora_chunked(
         file_path=out_model_path,
         lora_name=lora_name,
