@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
+cd /opt/ComfyUI
+git pull
+pip install -r requirements.txt
+
 # ========= CONFIG =========
 MODEL_DIR="/opt/ComfyUI/models/checkpoints"
 MODEL_ID="388349"                     # Copax Cute XL
