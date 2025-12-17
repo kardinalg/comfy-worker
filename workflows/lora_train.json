@@ -445,8 +445,8 @@
   },
   "112": {
     "inputs": {
-      "width": param_width,
-      "height": param_height,
+      "width": param_bucket_reso,
+      "height": param_bucket_reso,
       "batch_size": param_batch_size,
       "dataset_path": "param_file_path",
       "class_tokens": "param_lora_name",
