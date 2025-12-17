@@ -10,7 +10,7 @@
   },
   "8": {
     "inputs": {
-      "lora_name": "param_lora_1",
+      "lora_name": "param_lora_1_model",
       "strength_model": param_lora_1_strength_model,
       "strength_clip": param_lora_1_strength_clip,
       "model": ["4", 0],
@@ -21,7 +21,7 @@
   },
   "9": {
     "inputs": {
-      "lora_name": "param_lora_2",
+      "lora_name": "param_lora_2_model",
       "strength_model": param_lora_2_strength_model,
       "strength_clip": param_lora_2_strength_clip,
       "model": ["8", 0],
