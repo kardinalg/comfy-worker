@@ -1,0 +1,131 @@
+{
+  "4": {
+    "inputs": {
+      "ckpt_name": "param_base_model"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint - BASE"
+    }
+  },
+  "8": {
+    "inputs": {
+      "lora_name": "param_lora_1",
+      "strength_model": param_lora_1_strength_model,
+      "strength_clip": param_lora_1_strength_clip,
+      "model": ["4", 0],
+      "clip": ["4", 1]
+    },
+    "class_type": "LoraLoader",
+    "_meta": { "title": "Load LoRA #1" }
+  },
+  "9": {
+    "inputs": {
+      "lora_name": "param_lora_2",
+      "strength_model": param_lora_2_strength_model,
+      "strength_clip": param_lora_2_strength_clip,
+      "model": ["8", 0],
+      "clip": ["8", 1]
+    },
+    "class_type": "LoraLoader"
+  },
+  "5": {
+    "inputs": {
+      "width": param_width,
+      "height": param_height,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "param_prompt",
+      "clip": [
+        "9",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "param_negative_prompt",
+      "clip": [
+        "9",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "10": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": param_seed,
+      "steps": param_steps,
+      "cfg": 4.5,
+      "sampler_name": "dpmpp_2m_sde_gpu",
+      "scheduler": "karras",
+      "start_at_step": 0,
+      "end_at_step": param_steps,
+      "return_with_leftover_noise": "enable",
+      "model": [
+        "9",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "KSampler (Advanced) - BASE"
+    }
+  },
+  "17": {
+    "inputs": {
+      "samples": [
+        "10",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "19": {
+    "inputs": {
+      "filename_prefix": "lora_char",
+      "images": [
+        "17",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}

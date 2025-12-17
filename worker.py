@@ -42,6 +42,9 @@ os.makedirs(TRAIN_DATA_DIR, exist_ok=True)
 os.makedirs(TRAIN_OUTPUT_DIR, exist_ok=True)
 DOWNLOAD_FILE_URL = f"{API_BASE}/index.php?r=worker/getFile"
 
+COMFYUI_DIR = "/opt/ComfyUI"
+COMFYUI_LORA_DIR = os.path.join(COMFYUI_DIR, "models", "loras")
+
 # ------------------ Сервісні функції ------------------
 
 def sha256_file(path, chunk=1024*1024):
@@ -326,6 +329,43 @@ def download_training_files(file_prefix, names, max_workers=16, retries=5):
 
     return ok_paths, failed
 
+def safe_basename(name: str) -> str:
+    # Викидаємо будь-які директорії, залишаємо тільки ім'я файлу
+    base = os.path.basename(name.replace("\\", "/"))
+    if base in ("", ".", ".."):
+        raise ValueError(f"Некоректне ім'я файлу: {name!r}")
+    return base
+
+def download_lora_file(lora_name: str) -> str:
+    filename = safe_basename(lora_name)
+    os.makedirs(COMFYUI_LORA_DIR, exist_ok=True)
+    local_path = os.path.join(COMFYUI_LORA_DIR, filename)
+
+    params = {
+        "token": API_TOKEN,
+        "name": lora_name,  # або filename — залежить від твого бекенду
+    }
+
+    try:
+        r = requests.post(DOWNLOAD_LORA_URL, params=params, timeout=600, stream=True)
+        r.raise_for_status()
+    except Exception as e:
+        raise RuntimeError(f"Не вдалося завантажити LoRA {lora_name}: {e}")
+
+    with open(local_path, "wb") as f:
+        for chunk in r.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+
+    log(f"LoRA {lora_name} збережено в {local_path}")
+    return local_path
+
+def download_lora_files(loras) -> str:
+    if isinstance(loras, list) and loras:
+        for lora_name in loras:
+            path = download_lora_file(lora_name)
+
+    return 'downloaded'
 
 # ------------------ ComfyUI інтеграція ------------------
 # API: /prompt, /history/{id}, /view?filename=...&subfolder=...&type=... :contentReference[oaicite:0]{index=0}
@@ -662,7 +702,13 @@ def main():
             log(f"Отримано задачу #{tid} [{ttype}] workflow={workflow_key}")
 
             # приклад: type == 'lora_image' або 'frame_image' — все одно, ми просто шлемо в Comfy
-            if ttype in ("lora_image", "frame_image", "other"):
+            if ttype in ("lora_image", "frame_image", "other", "lora_test"):
+
+                lora_files = payload.get("loras") or []
+                if lora_files:
+                    log(f"[LoRA #{tid}] (fallback) Скачуємо файли: {lora_files}")
+                    download_lora_files(lora_files)
+
                 local_path = generate_with_comfy(workflow_key, payload)
                 remote_path = upload_image(tid, local_path)
                 if remote_path:
