@@ -115,6 +115,21 @@ def upload_image(task_id, path):
     finally:
         files["file"].close()
 
+def clear_dir(samples_dir="/opt/output/sample"):
+    if not os.path.isdir(samples_dir):
+        print(f"[INFO] samples dir not found: {samples_dir}")
+        return
+
+    for filename in os.listdir(samples_dir):
+        file_path = os.path.join(samples_dir, filename)
+
+        if os.path.isfile(file_path):
+            try:
+                os.remove(file_path)
+                print(f"[OK] deleted: {file_path}")
+            except Exception as e:
+                print(f"[ERROR] failed to delete {file_path}: {e}")
+
 def upload_samples(task_id, samples_dir="/opt/output/sample"):
     if not os.path.isdir(samples_dir):
         print(f"[INFO] samples dir not found: {samples_dir}")
@@ -561,7 +576,7 @@ def handle_lora_train_task(task):
 
     # === де comfy зберігає модель локально ===
     # Рекомендую НЕ /opt/output, а volume, але лишаю як ти написав
-    out_model_path = f"/opt/output/{lora_name}.safetensors_rank16_fp16.safetensors"
+    out_model_path = f"/opt/output/{tid}.safetensors_rank16_fp16.safetensors"
 
     # === параметри upload ===
     character_folder = payload.get("character_name") or payload.get("character_id") or lora_name
@@ -582,6 +597,7 @@ def handle_lora_train_task(task):
         log(f"✅ LoRA-задача #{tid} завершена (skip train), upload: {up.get('path')}")
         return
 
+    clear_dir()
     # 2) Старий шлях з zip/файлами — лишаю як optional fallback
     file_names = payload.get("files") or []
     file_prefix = payload.get("files_prefix")
@@ -640,6 +656,7 @@ def main():
         ttype = task["type"]
         workflow_key = task["workflow_key"]
         payload = task["payload"] or {}
+        task["payload"]["task_id"] = tid
 
         try:
             log(f"Отримано задачу #{tid} [{ttype}] workflow={workflow_key}")

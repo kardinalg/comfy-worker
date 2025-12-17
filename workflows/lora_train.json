@@ -454,7 +454,7 @@
       "bucket_no_upscale": false,
       "num_repeats": 1,
       "min_bucket_reso": 256,
-      "max_bucket_reso": 1024,
+      "max_bucket_reso": param_bucket_reso,
       "dataset_config": [
         "137",
         0
@@ -641,7 +641,7 @@
   },
   "144": {
     "inputs": {
-      "output_name": "param_lora_name.safetensors",
+      "output_name": "param_task_id.safetensors",
       "output_dir": "/opt/output/",
       "network_dim": 16,
       "network_alpha": 16,
