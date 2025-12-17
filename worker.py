@@ -347,7 +347,7 @@ def download_lora_file(lora_name: str) -> str:
     }
 
     try:
-        r = requests.post(DOWNLOAD_LORA_URL, params=params, timeout=600, stream=True)
+        r = requests.post(DOWNLOAD_FILE_URL, params=params, timeout=600, stream=True)
         r.raise_for_status()
     except Exception as e:
         raise RuntimeError(f"Не вдалося завантажити LoRA {lora_name}: {e}")
