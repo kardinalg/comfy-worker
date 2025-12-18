@@ -390,7 +390,7 @@ def build_workflow_from_payload(workflow_key: str, payload: dict) -> dict:
         elif isinstance(value, (int, float)):
             replacement = str(value)
         else:
-            #s = str(value)
+            s = str(value)
             #dumped = json.dumps(s, ensure_ascii=False)
             replacement = s #dumped[1:-1]  # викидаємо зовнішні лапки
 
