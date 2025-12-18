@@ -10,9 +10,13 @@ import traceback
 import requests
 import base64
 import subprocess
-import hashlib
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from download_dependencies import (
+    init_downloader,
+    download_dependencies
+)
+from upload import init_uploader, upload_image, upload_file, upload_lora_chunked, upload_samples
 
 # ------------------ Налаштування ------------------
 
@@ -38,25 +42,14 @@ os.makedirs(TMP_DIR, exist_ok=True)
 
 TRAIN_DATA_DIR = "/opt/lora_train_data"
 TRAIN_OUTPUT_DIR = "/opt/lora_train_output"
-os.makedirs(TRAIN_DATA_DIR, exist_ok=True)
 os.makedirs(TRAIN_OUTPUT_DIR, exist_ok=True)
 DOWNLOAD_FILE_URL = f"{API_BASE}/index.php?r=worker/getFile"
 
-COMFYUI_DIR = "/opt/ComfyUI"
-COMFYUI_LORA_DIR = os.path.join(COMFYUI_DIR, "models", "loras")
-COMFYUI_CHECKPOINTS_DIR = os.path.join(COMFYUI_DIR, "models", "checkpoints")
+#COMFYUI_DIR = "/opt/ComfyUI"
+#COMFYUI_LORA_DIR = os.path.join(COMFYUI_DIR, "models", "loras")
+#COMFYUI_CHECKPOINTS_DIR = os.path.join(COMFYUI_DIR, "models", "checkpoints")
 
 # ------------------ Сервісні функції ------------------
-
-def sha256_file(path, chunk=1024*1024):
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        while True:
-            b = f.read(chunk)
-            if not b:
-                break
-            h.update(b)
-    return h.hexdigest()
 
 def log(msg: str):
     ts = datetime.now().strftime("%H:%M:%S")
@@ -75,58 +68,6 @@ def get_task():
         log(f"Помилка запиту задачі: {e}")
         return None
 
-def _filename_from_url(url: str, fallback: str = "download.bin") -> str:
-    name = Path(urlparse(url).path).name
-    return name if name else fallback
-
-
-def _get_target_dir(dep_type: str) -> str:
-    dep_type = (dep_type or "").lower()
-
-    if dep_type == "loras":
-        return COMFYUI_LORA_DIR
-
-    if dep_type == "checkpoints":
-        return COMFYUI_CHECKPOINTS_DIR
-
-    raise ValueError(f"Unknown dependency type: {dep_type}")
-
-def download_simple(url: str, target_dir: str) -> str:
-    Path(target_dir).mkdir(parents=True, exist_ok=True)
-
-    out_path = Path(target_dir) / _filename_from_url(url)
-
-    with requests.get(url, stream=True, timeout=60) as r:
-        r.raise_for_status()
-        with open(out_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    f.write(chunk)
-
-    return str(out_path)
-
-
-def download_civitai(url: str, target_dir: str) -> str:
-    api_key = os.environ.get("CIVITAI_API_KEY")
-    if not api_key:
-        raise RuntimeError("CIVITAI_API_KEY is not set")
-
-    Path(target_dir).mkdir(parents=True, exist_ok=True)
-    out_path = Path(target_dir) / _filename_from_url(url)
-
-    headers = {
-        "Authorization": f"Bearer {api_key}"
-    }
-
-    with requests.get(url, headers=headers, stream=True, timeout=60) as r:
-        r.raise_for_status()
-        with open(out_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
-                if chunk:
-                    f.write(chunk)
-
-    return str(out_path)
-
 def update_task(task_id, status, error=None, payload_update=None):
     payload = {
         "token": API_TOKEN,
@@ -141,34 +82,6 @@ def update_task(task_id, status, error=None, payload_update=None):
         requests.post(UPDATE_TASK_URL, data=payload, timeout=15)
     except Exception as e:
         log(f"Не вдалося оновити статус задачі {task_id}: {e}")
-
-def upload_file(task_id, path):
-    files = {"file": open(path, "rb")}
-    data = {"token": API_TOKEN, "task_id": task_id}
-    try:
-        r = requests.post(UPLOAD_FILE_URL, data=data, files=files, timeout=120)
-        r.raise_for_status()
-        resp = r.json()
-        return None
-    except Exception as e:
-        log(f"Помилка аплоаду файлу {path}: {e}")
-        return None
-    finally:
-        files["file"].close()
-
-def upload_image(task_id, path):
-    files = {"file": open(path, "rb")}
-    data = {"token": API_TOKEN, "task_id": task_id}
-    try:
-        r = requests.post(UPLOAD_IMAGE_URL, data=data, files=files, timeout=120)
-        r.raise_for_status()
-        resp = r.json()
-        return resp.get("result_path")
-    except Exception as e:
-        log(f"Помилка аплоаду файлу {path}: {e}")
-        return None
-    finally:
-        files["file"].close()
 
 def clear_dir(samples_dir="/opt/output/sample"):
     if not os.path.isdir(samples_dir):
@@ -185,239 +98,6 @@ def clear_dir(samples_dir="/opt/output/sample"):
             except Exception as e:
                 print(f"[ERROR] failed to delete {file_path}: {e}")
 
-def upload_samples(task_id, samples_dir="/opt/output/sample"):
-    if not os.path.isdir(samples_dir):
-        print(f"[INFO] samples dir not found: {samples_dir}")
-        return
-
-    for filename in os.listdir(samples_dir):
-        file_path = os.path.join(samples_dir, filename)
-
-        if not os.path.isfile(file_path):
-            continue
-
-        try:
-            upload_file(task_id, file_path)
-            print(f"[OK] uploaded: {file_path}")
-        except Exception as e:
-            print(f"[ERROR] failed to upload {file_path}: {e}")
-
-def upload_lora_chunked(
-    file_path: str,
-    lora_name: str,
-    chunk_size: int = 2 * 1024 * 1024,
-    max_retries: int = 8,
-):
-    total_size = os.path.getsize(file_path)
-    file_hash = sha256_file(file_path)
-
-    headers = {"X-Auth-Token": API_TOKEN}
-
-    # 1) init / resume
-    r = requests.post(UPLOAD_LORA_INIT, headers=headers, data={
-        "lora_name": lora_name,
-        "total_size": str(total_size),
-        "sha256": file_hash,
-    }, timeout=30)
-    r.raise_for_status()
-    j = r.json()
-    if j.get("status") != "ok":
-        raise RuntimeError(j)
-
-    uploaded = int(j["uploaded_bytes"])
-    print(f"[upload] resume from {uploaded}/{total_size}")
-
-    # 2) upload chunks append-only
-    with open(file_path, "rb") as f:
-        f.seek(uploaded)
-        offset = uploaded
-
-        while offset < total_size:
-            data = f.read(chunk_size)
-            if not data:
-                break
-
-            # retry loop
-            attempt = 0
-            while True:
-                try:
-                    rr = requests.post(
-                        UPLOAD_LORA_CHUNK,
-                        headers={**headers, "Content-Type": "application/octet-stream"},
-                        params={"lora_name": lora_name, "offset": str(offset)},
-                        data=data,
-                        timeout=120,
-                    )
-                    # 409 = offset mismatch -> повторно init і продовжити з correct offset
-                    if rr.status_code == 409:
-                        jj = rr.json()
-                        offset = int(jj.get("expected_offset", offset))
-                        f.seek(offset)
-                        print(f"[upload] offset mismatch, jump to {offset}")
-                        data = f.read(chunk_size)
-                        continue
-
-                    rr.raise_for_status()
-                    jj = rr.json()
-                    if jj.get("status") != "ok":
-                        raise RuntimeError(jj)
-
-                    offset = int(jj["uploaded_bytes"])
-                    print(f"[upload] {offset}/{total_size}")
-                    break
-                except Exception as e:
-                    attempt += 1
-                    if attempt > max_retries:
-                        raise
-                    sleep = min(2 ** attempt, 30)
-                    print(f"[upload] retry {attempt}/{max_retries} after {sleep}s: {e}")
-                    time.sleep(sleep)
-
-    # 3) finalize
-    rf = requests.post(UPLOAD_LORA_FINAL, headers=headers, data={
-        "lora_name": lora_name,
-        "total_size": str(total_size),
-        "sha256": file_hash,
-    }, timeout=60)
-    rf.raise_for_status()
-    jf = rf.json()
-    if jf.get("status") != "ok":
-        raise RuntimeError(jf)
-
-    print(f"[upload] DONE: {jf.get('path')} size={jf.get('size')}")
-    return jf
-
-# ------------------ Lora train
-def download_training_file(name: str) -> str:
-    params = {
-        "token": API_TOKEN,
-        "name": name,
-    }
-    try:
-        r = requests.post(DOWNLOAD_FILE_URL, params=params, timeout=600, stream=True)
-        r.raise_for_status()
-    except Exception as e:
-        raise RuntimeError(f"Не вдалося завантажити файл {name}: {e}")
-
-    local_path = os.path.join(TRAIN_DATA_DIR, name)
-    # на всяк випадок — створимо піддиректорії, якщо в імені є шлях
-    os.makedirs(os.path.dirname(local_path), exist_ok=True)
-
-    with open(local_path, "wb") as f:
-        for chunk in r.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-
-    log(f"Файл {name} збережено в {local_path}")
-    return local_path
-
-def _download_one(session: requests.Session, name: str) -> str:
-    params = {"token": API_TOKEN, "name": name}
-
-    local_path = os.path.join(TRAIN_DATA_DIR, name)
-    os.makedirs(os.path.dirname(local_path), exist_ok=True)
-
-    with session.post(DOWNLOAD_FILE_URL, params=params, timeout=600, stream=True) as r:
-        r.raise_for_status()
-        with open(local_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=1024 * 1024):  # 1MB
-                if chunk:
-                    f.write(chunk)
-
-    return local_path
-
-
-def download_training_files(file_prefix, names, max_workers=16, retries=5):
-    """
-    Паралельне скачування з обмеженням max_workers.
-    Повертає (ok_paths, failed_names).
-    """
-    to_download = [file_prefix + n for n in names]
-    ok_paths = []
-    failed = []
-
-    # ВАЖЛИВО: Session не thread-safe, тому робимо по сесії на потік через initializer-лайт.
-    # Найпростіше — створювати session всередині задачі (трохи дорожче), або тримати thread-local.
-    import threading
-    tls = threading.local()
-
-    def task(full_name: str) -> str:
-        if not hasattr(tls, "session"):
-            tls.session = requests.Session()
-
-        last_err = None
-        for attempt in range(retries):
-            try:
-                return _download_one(tls.session, full_name)
-            except requests.HTTPError as e:
-                status = getattr(e.response, "status_code", None)
-                # retry на rate limit / тимчасові серверні
-                if status in (429, 500, 502, 503, 504):
-                    sleep_s = min(60, (2 ** attempt) + random.random())
-                    time.sleep(sleep_s)
-                    last_err = e
-                    continue
-                raise
-            except (requests.ConnectionError, requests.Timeout) as e:
-                sleep_s = min(60, (2 ** attempt) + random.random())
-                time.sleep(sleep_s)
-                last_err = e
-                continue
-
-        raise RuntimeError(f"Failed after {retries} retries: {full_name}. Last error: {last_err}")
-
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futures = {ex.submit(task, n): n for n in to_download}
-        for fut in as_completed(futures):
-            n = futures[fut]
-            try:
-                p = fut.result()
-                ok_paths.append(p)
-                # якщо хочеш прогрес:
-                # log(f"OK: {n}")
-            except Exception as e:
-                failed.append(n)
-                log(f"FAIL: {n}: {e}")
-
-    return ok_paths, failed
-
-def safe_basename(name: str) -> str:
-    # Викидаємо будь-які директорії, залишаємо тільки ім'я файлу
-    base = os.path.basename(name.replace("\\", "/"))
-    if base in ("", ".", ".."):
-        raise ValueError(f"Некоректне ім'я файлу: {name!r}")
-    return base
-
-def download_lora_file(lora_name: str) -> str:
-    filename = safe_basename(lora_name)
-    os.makedirs(COMFYUI_LORA_DIR, exist_ok=True)
-    local_path = os.path.join(COMFYUI_LORA_DIR, filename)
-
-    params = {
-        "token": API_TOKEN,
-        "name": lora_name,  # або filename — залежить від твого бекенду
-    }
-
-    try:
-        r = requests.post(DOWNLOAD_FILE_URL, params=params, timeout=600, stream=True)
-        r.raise_for_status()
-    except Exception as e:
-        raise RuntimeError(f"Не вдалося завантажити LoRA {lora_name}: {e}")
-
-    with open(local_path, "wb") as f:
-        for chunk in r.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-
-    log(f"LoRA {lora_name} збережено в {local_path}")
-    return local_path
-
-def download_lora_files(loras) -> str:
-    if isinstance(loras, list) and loras:
-        for lora_name in loras:
-            path = download_lora_file(lora_name)
-
-    return 'downloaded'
 
 # ------------------ ComfyUI інтеграція ------------------
 # API: /prompt, /history/{id}, /view?filename=...&subfolder=...&type=... :contentReference[oaicite:0]{index=0}
@@ -521,61 +201,6 @@ def run_workflow_via_comfy_api(workflow: dict, client_id: str) -> dict:
         raise RuntimeError(f"Несподіваний формат відповіді comfyui-api: {data}")
     return data
 
-
-def wait_for_result(prompt_id: str, timeout_sec: int = 600) -> dict:
-    """
-    Полінг /history/{prompt_id}, поки не буде результату.
-    Повертає JSON history.
-    """
-    url = f"{COMFY_HTTP}/history/{prompt_id}"
-    start = time.time()
-    while True:
-        r = requests.get(url, timeout=15)
-        if r.status_code == 200:
-            data = r.json()
-            # Структура: { prompt_id: { "outputs": {...} } }
-            if prompt_id in data and "outputs" in data[prompt_id]:
-                return data[prompt_id]
-        # чек
-        if time.time() - start > timeout_sec:
-            raise TimeoutError(f"ComfyUI не завершив задачу за {timeout_sec} сек.")
-        time.sleep(2)
-
-
-def extract_first_image_info(history: dict) -> dict:
-    """
-    Витягуємо перший output image: filename, subfolder, type.
-    """
-    outputs = history.get("outputs", {})
-    for node_id, node_out in outputs.items():
-        images = node_out.get("images") or []
-        if not images:
-            continue
-        img = images[0]
-        return {
-            "filename": img.get("filename"),
-            "subfolder": img.get("subfolder") or "",
-            "type": img.get("type") or "output",
-        }
-    raise RuntimeError("Не знайдено жодного зображення в history")
-
-
-def download_image_from_comfy(info: dict, local_path: str):
-    """
-    /view?filename=...&subfolder=...&type=...
-    """
-    params = {
-        "filename": info["filename"],
-        "subfolder": info["subfolder"],
-        "type": info["type"],  # input/output/temp
-    }
-    url = f"{COMFY_HTTP}/view"
-    r = requests.get(url, params=params, timeout=120)
-    r.raise_for_status()
-    with open(local_path, "wb") as f:
-        f.write(r.content)
-
-
 def generate_with_comfy(workflow_key: str, payload: dict) -> str:
     """
     Повний цикл:
@@ -589,23 +214,6 @@ def generate_with_comfy(workflow_key: str, payload: dict) -> str:
 
     # 1) будуємо workflow з payload
     workflow = build_workflow_from_payload(workflow_key, payload)
-
-    # 2) відправляємо в ComfyUI
-    # prompt_id = queue_prompt_to_comfy(workflow, client_id)
-    # log(f"ComfyUI prompt_id={prompt_id}")
-
-    # # 3) чекаємо завершення
-    # history = wait_for_result(prompt_id)
-
-    # # 4) беремо перше зображення
-    # img_info = extract_first_image_info(history)
-    # log(f"Отримано файл з ComfyUI: {img_info}")
-
-    # # 5) качаємо в tmp
-    # ext = os.path.splitext(img_info["filename"])[1] or ".png"
-    # tmp_name = f"comfy_{prompt_id[:8]}{ext}"
-    # local_path = os.path.join(TMP_DIR, tmp_name)
-    # download_image_from_comfy(img_info, local_path)
 
     # 2) запускаємо workflow через comfyui-api
     result = run_workflow_via_comfy_api(workflow, client_id)
@@ -692,16 +300,6 @@ def handle_lora_train_task(task):
         return
 
     clear_dir()
-    # 2) Старий шлях з zip/файлами — лишаю як optional fallback
-    file_names = payload.get("files") or []
-    file_prefix = payload.get("files_prefix")
-    if file_names:
-        log(f"[LoRA #{tid}] (fallback) Скачуємо файли: {file_names}")
-        #data_paths = 
-        download_training_files(file_prefix, file_names)
-        #payload["data_paths"] = data_paths  # якщо comfy/workflow це читає
-    else:
-        log(f"[LoRA #{tid}] payload.files порожній — припускаю, що dataset вже на диску/налаштований у workflow.")
 
     # 3) Запускаємо comfy training
     log(f"[LoRA #{tid}] Старт тренування через Comfy, workflow={workflow_key}")
@@ -738,41 +336,14 @@ def handle_lora_train_task(task):
     update_task(tid, "done", None, payload_update)
     log(f"✅ LoRA-задача #{tid} завершена, модель: {out_model_path} → {up.get('path')}")
 
-def handle_dependencies(task: dict):
-    dependency = task.get("dependency") or []
-
-    for dep in dependency:
-        if not isinstance(dep, dict):
-            continue
-
-        log(f"Скачуємо залежності {url}")
-        url = dep.get("url")
-        url_type = (dep.get("url_type") or "simple").lower()
-        dep_type = dep.get("type")  # loras / checkpoints
-        files = dep.get("files") or []
-
-        if not url or not dep_type:
-            continue
-
-        target_dir = _get_target_dir(dep_type)
-
-        if url_type == "simple":
-            download_simple(url, target_dir)
-
-        elif url_type == "civitai":
-            download_civitai(url, target_dir)
-
-        elif url_type == "kg7-lora":
-            # lora завжди йде в loras
-            download_lora_file(url)
-
-        elif url_type == "kg7-file":
-            download_training_files(url, files)
-
-        else:
-            raise ValueError(f"Unknown url_type: {url_type}")
-
 def main():
+    init_downloader(
+        api_token=API_TOKEN,
+        download_file_url=DOWNLOAD_FILE_URL,
+        train_data_dir=TRAIN_DATA_DIR,
+        log_fn=log,
+    )
+    init_uploader(API_TOKEN, UPLOAD_FILE_URL, UPLOAD_IMAGE_URL, log)
     log("Воркер запущено. Очікуємо задачі...")
     while True:
         task = get_task()
@@ -784,21 +355,14 @@ def main():
         ttype = task["type"]
         workflow_key = task["workflow_key"]
         payload = task["payload"] or {}
-        dependency = task["dependency"] or []
         task["payload"]["task_id"] = tid
 
         try:
             log(f"Отримано задачу #{tid} [{ttype}] workflow={workflow_key}")
-            handle_dependencies(dependency)
+            download_dependencies(task.get("dependency") or [])
 
             # приклад: type == 'lora_image' або 'frame_image' — все одно, ми просто шлемо в Comfy
             if ttype in ("lora_image", "frame_image", "other", "lora_test"):
-
-                lora_files = payload.get("loras") or []
-                if lora_files:
-                    log(f"[LoRA #{tid}] (fallback) Скачуємо файли: {lora_files}")
-                    download_lora_files(lora_files)
-
                 local_path = generate_with_comfy(workflow_key, payload)
                 remote_path = upload_image(tid, local_path)
                 if remote_path:
