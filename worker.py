@@ -401,7 +401,7 @@ def build_workflow_from_payload(workflow_key: str, payload: dict) -> dict:
     try:
         workflow = json.loads(txt)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Не вдалося розпарсити workflow після підстановки: {e}\nШматок: {txt[:1000]}")
+        raise ValueError(f"Не вдалося розпарсити workflow після підстановки: {e}\nШматок: {txt}")
 
     return workflow
 
