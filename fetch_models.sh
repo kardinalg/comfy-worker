@@ -6,32 +6,32 @@ git pull
 pip install -r requirements.txt
 
 # ========= CONFIG =========
-MODEL_DIR="/opt/ComfyUI/models/checkpoints"
-MODEL_ID="388349"                     # Copax Cute XL
-MODEL_NAME="copax_cute_xl.safetensors"
-CIVITAI_API_KEY="${CIVITAI_API_KEY:-}"
-CHECKPOINT_DIR="${MODEL_DIR}"
+#MODEL_DIR="/opt/ComfyUI/models/checkpoints"
+#MODEL_ID="388349"                     # Copax Cute XL
+#MODEL_NAME="copax_cute_xl.safetensors"
+#CIVITAI_API_KEY="${CIVITAI_API_KEY:-}"
+#CHECKPOINT_DIR="${MODEL_DIR}"
 
 # ========= CHECKS =========
-mkdir -p "$MODEL_DIR"
+#mkdir -p "$MODEL_DIR"
 
-if [ -f "$MODEL_DIR/$MODEL_NAME" ]; then
-  echo "[models] $MODEL_NAME already exists, skipping download"
-  exit 0
-fi
+#if [ -f "$MODEL_DIR/$MODEL_NAME" ]; then
+#  echo "[models] $MODEL_NAME already exists, skipping download"
+#  exit 0
+#fi
 
-if [ -z "$CIVITAI_API_KEY" ]; then
-  echo "[models][ERROR] CIVITAI_API_KEY is not set"
-  exit 1
-fi
+#if [ -z "$CIVITAI_API_KEY" ]; then
+#  echo "[models][ERROR] CIVITAI_API_KEY is not set"
+#  exit 1
+#fi
 
 # ========= DOWNLOAD =========
-echo "[models] Downloading $MODEL_NAME from Civitai..."
+#echo "[models] Downloading $MODEL_NAME from Civitai..."
 
-curl -fL \
-  -H "Authorization: Bearer $CIVITAI_API_KEY" \
-  -o "$MODEL_DIR/$MODEL_NAME" \
-  "https://civitai.com/api/download/models/$MODEL_ID"
+#curl -fL \
+#  -H "Authorization: Bearer $CIVITAI_API_KEY" \
+#  -o "$MODEL_DIR/$MODEL_NAME" \
+#  "https://civitai.com/api/download/models/$MODEL_ID"
 
 # ========= VALIDATION =========
 #FILE_TYPE=$(file "$MODEL_DIR/$MODEL_NAME")
@@ -42,7 +42,7 @@ curl -fL \
 #  exit 1
 #fi
 
-echo "[models] Download complete: $MODEL_NAME"
+#echo "[models] Download complete: $MODEL_NAME"
 
 
 download_sdxl() {
