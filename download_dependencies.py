@@ -59,9 +59,9 @@ def safe_basename(name: str) -> str:
         raise ValueError(f"Некоректне ім'я файлу: {name!r}")
     return base
 
-def download_simple(url: str, target_dir: str, *, min_size: int = 1_024) -> str:
+def download_simple(url: str, target_dir: str, file_name: str, *, min_size: int = 1_024) -> str:
     Path(target_dir).mkdir(parents=True, exist_ok=True)
-    out_path = Path(target_dir) / _filename_from_url(url)
+    out_path = Path(target_dir) / file_name
 
     # ✅ skip if already downloaded
     if out_path.exists():
@@ -85,13 +85,13 @@ def download_simple(url: str, target_dir: str, *, min_size: int = 1_024) -> str:
     return str(out_path)
 
 
-def download_civitai(url: str, target_dir: str, *, min_size: int = 1_024) -> str:
+def download_civitai(url: str, target_dir: str, file_name: str, *, min_size: int = 1_024) -> str:
     api_key = os.environ.get("CIVITAI_API_KEY")
     if not api_key:
         raise RuntimeError("CIVITAI_API_KEY is not set")
 
     Path(target_dir).mkdir(parents=True, exist_ok=True)
-    out_path = Path(target_dir) / _filename_from_url(url)
+    out_path = Path(target_dir) / file_name
 
     # ✅ skip if already downloaded
     if out_path.exists():
@@ -231,23 +231,23 @@ def download_dependencies(dependency: list):
             continue
 
         url = dep.get("url")
-        _LOG(f"Скачування залежності {url}");
         url_type = (dep.get("url_type") or "simple").lower()
         dep_type = dep.get("type")  # loras / checkpoints
         files = dep.get("files") or []
+        file_name = dep.get("file_name")
 
         if not url or not dep_type:
             continue
 
-        _LOG(f"Залежність: type={dep_type} url_type={url_type} url={url}")
+        _LOG(f"Залежність: file_name={file_name} type={dep_type} url_type={url_type} url={url}")
 
         target_dir = _get_target_dir(dep_type)
 
         if url_type == "simple":
-            download_simple(url, target_dir)
+            download_simple(url, target_dir, file_name)
 
         elif url_type == "civitai":
-            download_civitai(url, target_dir)
+            download_civitai(url, target_dir, file_name)
 
         elif url_type == "kg7-lora":
             download_lora_file(url)

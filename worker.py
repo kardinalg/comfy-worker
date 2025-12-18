@@ -359,7 +359,7 @@ def main():
 
         try:
             log(f"Отримано задачу #{tid} [{ttype}] workflow={workflow_key}")
-            download_dependencies(task.get("dependency") or [])
+            download_dependencies(task["dependency"] or [])
 
             # приклад: type == 'lora_image' або 'frame_image' — все одно, ми просто шлемо в Comfy
             if ttype in ("lora_image", "frame_image", "other", "lora_test"):
