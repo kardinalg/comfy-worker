@@ -44,6 +44,7 @@ DOWNLOAD_FILE_URL = f"{API_BASE}/index.php?r=worker/getFile"
 
 COMFYUI_DIR = "/opt/ComfyUI"
 COMFYUI_LORA_DIR = os.path.join(COMFYUI_DIR, "models", "loras")
+COMFYUI_CHECKPOINTS_DIR = os.path.join(COMFYUI_DIR, "models", "checkpoints")
 
 # ------------------ Сервісні функції ------------------
 
@@ -74,6 +75,57 @@ def get_task():
         log(f"Помилка запиту задачі: {e}")
         return None
 
+def _filename_from_url(url: str, fallback: str = "download.bin") -> str:
+    name = Path(urlparse(url).path).name
+    return name if name else fallback
+
+
+def _get_target_dir(dep_type: str) -> str:
+    dep_type = (dep_type or "").lower()
+
+    if dep_type == "loras":
+        return COMFYUI_LORA_DIR
+
+    if dep_type == "checkpoints":
+        return COMFYUI_CHECKPOINTS_DIR
+
+    raise ValueError(f"Unknown dependency type: {dep_type}")
+
+def download_simple(url: str, target_dir: str) -> str:
+    Path(target_dir).mkdir(parents=True, exist_ok=True)
+
+    out_path = Path(target_dir) / _filename_from_url(url)
+
+    with requests.get(url, stream=True, timeout=60) as r:
+        r.raise_for_status()
+        with open(out_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    f.write(chunk)
+
+    return str(out_path)
+
+
+def download_civitai(url: str, target_dir: str) -> str:
+    api_key = os.environ.get("CIVITAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("CIVITAI_API_KEY is not set")
+
+    Path(target_dir).mkdir(parents=True, exist_ok=True)
+    out_path = Path(target_dir) / _filename_from_url(url)
+
+    headers = {
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    with requests.get(url, headers=headers, stream=True, timeout=60) as r:
+        r.raise_for_status()
+        with open(out_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    f.write(chunk)
+
+    return str(out_path)
 
 def update_task(task_id, status, error=None, payload_update=None):
     payload = {
@@ -686,6 +738,40 @@ def handle_lora_train_task(task):
     update_task(tid, "done", None, payload_update)
     log(f"✅ LoRA-задача #{tid} завершена, модель: {out_model_path} → {up.get('path')}")
 
+def handle_dependencies(task: dict):
+    dependency = task.get("dependency") or []
+
+    for dep in dependency:
+        if not isinstance(dep, dict):
+            continue
+
+        log(f"Скачуємо залежності {url}")
+        url = dep.get("url")
+        url_type = (dep.get("url_type") or "simple").lower()
+        dep_type = dep.get("type")  # loras / checkpoints
+        files = dep.get("files") or []
+
+        if not url or not dep_type:
+            continue
+
+        target_dir = _get_target_dir(dep_type)
+
+        if url_type == "simple":
+            download_simple(url, target_dir)
+
+        elif url_type == "civitai":
+            download_civitai(url, target_dir)
+
+        elif url_type == "kg7-lora":
+            # lora завжди йде в loras
+            download_lora_file(url)
+
+        elif url_type == "kg7-file":
+            download_training_files(url, files)
+
+        else:
+            raise ValueError(f"Unknown url_type: {url_type}")
+
 def main():
     log("Воркер запущено. Очікуємо задачі...")
     while True:
@@ -698,10 +784,12 @@ def main():
         ttype = task["type"]
         workflow_key = task["workflow_key"]
         payload = task["payload"] or {}
+        dependency = task["dependency"] or []
         task["payload"]["task_id"] = tid
 
         try:
             log(f"Отримано задачу #{tid} [{ttype}] workflow={workflow_key}")
+            handle_dependencies(dependency)
 
             # приклад: type == 'lora_image' або 'frame_image' — все одно, ми просто шлемо в Comfy
             if ttype in ("lora_image", "frame_image", "other", "lora_test"):
