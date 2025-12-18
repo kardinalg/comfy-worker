@@ -390,9 +390,9 @@ def build_workflow_from_payload(workflow_key: str, payload: dict) -> dict:
         elif isinstance(value, (int, float)):
             replacement = str(value)
         else:
-            s = str(value)
-            dumped = json.dumps(s, ensure_ascii=False)
-            replacement = dumped[1:-1]  # викидаємо зовнішні лапки
+            #s = str(value)
+            #dumped = json.dumps(s, ensure_ascii=False)
+            replacement = s #dumped[1:-1]  # викидаємо зовнішні лапки
 
         # І тупо заміняємо в тексті ВСІ входження param_<key>
         txt = txt.replace(placeholder, replacement)
