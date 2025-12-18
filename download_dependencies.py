@@ -59,21 +59,33 @@ def safe_basename(name: str) -> str:
         raise ValueError(f"Некоректне ім'я файлу: {name!r}")
     return base
 
-def download_simple(url: str, target_dir: str) -> str:
+def download_simple(url: str, target_dir: str, *, min_size: int = 1_024) -> str:
     Path(target_dir).mkdir(parents=True, exist_ok=True)
     out_path = Path(target_dir) / _filename_from_url(url)
 
+    # ✅ skip if already downloaded
+    if out_path.exists():
+        try:
+            if out_path.stat().st_size >= min_size:
+                return str(out_path)
+        except OSError:
+            pass  # якщо не можемо прочитати — спробуємо перекачати
+
+    tmp_path = out_path.with_suffix(out_path.suffix + ".part")
+
     with requests.get(url, stream=True, timeout=60) as r:
         r.raise_for_status()
-        with open(out_path, "wb") as f:
+        with open(tmp_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=1024 * 1024):
                 if chunk:
                     f.write(chunk)
 
+    # атомарно замінюємо
+    os.replace(tmp_path, out_path)
     return str(out_path)
 
 
-def download_civitai(url: str, target_dir: str) -> str:
+def download_civitai(url: str, target_dir: str, *, min_size: int = 1_024) -> str:
     api_key = os.environ.get("CIVITAI_API_KEY")
     if not api_key:
         raise RuntimeError("CIVITAI_API_KEY is not set")
@@ -81,15 +93,26 @@ def download_civitai(url: str, target_dir: str) -> str:
     Path(target_dir).mkdir(parents=True, exist_ok=True)
     out_path = Path(target_dir) / _filename_from_url(url)
 
+    # ✅ skip if already downloaded
+    if out_path.exists():
+        try:
+            if out_path.stat().st_size >= min_size:
+                return str(out_path)
+        except OSError:
+            pass
+
+    tmp_path = out_path.with_suffix(out_path.suffix + ".part")
+
     headers = {"Authorization": f"Bearer {api_key}"}
 
     with requests.get(url, headers=headers, stream=True, timeout=60) as r:
         r.raise_for_status()
-        with open(out_path, "wb") as f:
+        with open(tmp_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=1024 * 1024):
                 if chunk:
                     f.write(chunk)
 
+    os.replace(tmp_path, out_path)
     return str(out_path)
 
 
@@ -208,6 +231,7 @@ def download_dependencies(dependency: list):
             continue
 
         url = dep.get("url")
+        _LOG(f"Скачування залежності {url}");
         url_type = (dep.get("url_type") or "simple").lower()
         dep_type = dep.get("type")  # loras / checkpoints
         files = dep.get("files") or []
