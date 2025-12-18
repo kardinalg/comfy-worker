@@ -8,27 +8,7 @@
       "title": "Load Checkpoint - BASE"
     }
   },
-  "8": {
-    "inputs": {
-      "lora_name": "param_lora_1_model",
-      "strength_model": param_lora_1_strength_model,
-      "strength_clip": param_lora_1_strength_clip,
-      "model": ["4", 0],
-      "clip": ["4", 1]
-    },
-    "class_type": "LoraLoader",
-    "_meta": { "title": "Load LoRA #1" }
-  },
-  "9": {
-    "inputs": {
-      "lora_name": "param_lora_2_model",
-      "strength_model": param_lora_2_strength_model,
-      "strength_clip": param_lora_2_strength_clip,
-      "model": ["8", 0],
-      "clip": ["8", 1]
-    },
-    "class_type": "LoraLoader"
-  },
+  param_lora_nodes
   "5": {
     "inputs": {
       "width": param_width,
@@ -44,7 +24,7 @@
     "inputs": {
       "text": "param_prompt",
       "clip": [
-        "9",
+        "param_last_lora_id",
         1
       ]
     },
@@ -57,7 +37,7 @@
     "inputs": {
       "text": "param_negative_prompt",
       "clip": [
-        "9",
+        "param_last_lora_id",
         1
       ]
     },
@@ -78,7 +58,7 @@
       "end_at_step": param_steps,
       "return_with_leftover_noise": "enable",
       "model": [
-        "9",
+        "param_last_lora_id",
         0
       ],
       "positive": [
