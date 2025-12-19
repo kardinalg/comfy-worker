@@ -192,6 +192,10 @@ def download_lora_file(lora_name: str) -> str:
     filename = safe_basename(lora_name)
     local_path = os.path.join(COMFYUI_LORA_DIR, filename)
 
+    if os.path.isfile(local_path):
+        _LOG(f"LoRA {lora_name} вже існує: {local_path}")
+        return local_path
+
     params = {"token": _API_TOKEN, "name": lora_name}
 
     try:

@@ -51,9 +51,9 @@
       "add_noise": "enable",
       "noise_seed": param_seed,
       "steps": param_steps,
-      "cfg": 4.5,
-      "sampler_name": "dpmpp_2m_sde_gpu",
-      "scheduler": "karras",
+      "cfg": param_cfg,
+      "sampler_name": "param_sampler",
+      "scheduler": "param_sampler_type",
       "start_at_step": 0,
       "end_at_step": param_steps,
       "return_with_leftover_noise": "enable",
@@ -97,7 +97,7 @@
   },
   "19": {
     "inputs": {
-      "filename_prefix": "lora_char",
+      "filename_prefix": "image",
       "images": [
         "17",
         0
