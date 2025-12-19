@@ -51,7 +51,7 @@
       "noise_seed": param_seed,
       "steps": param_steps,
       "cfg": param_cfg,
-      "sampler_name": "param_sampler",
+      "sampler_name": "param_sampler_name",
       "scheduler": "param_sampler_type",
       "start_at_step": 0,
       "end_at_step": param_steps,
