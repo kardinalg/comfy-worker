@@ -171,9 +171,9 @@
   },
   "98": {
     "inputs": {
-      "width": 512,
-      "height": 384,
-      "length": 17,
+      "width": 1024,
+      "height": 768,
+      "length": 81,
       "batch_size": 1,
       "positive": [
         "93",
@@ -252,14 +252,18 @@
     }
   },
   "108": {
-  "inputs": {
-    "filename_prefix": "wan_frames/ComfyUI",
-    "images": ["87", 0]
-  },
-  "class_type": "SaveImage",
-  "_meta": {
-    "title": "Save Frames"
+    "inputs": {
+      "filename_prefix": "video/ComfyUI",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "94",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
   }
-}
-
 }
