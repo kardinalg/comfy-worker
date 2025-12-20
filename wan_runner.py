@@ -121,6 +121,37 @@ def wait_for_wan_video_output(
         )
     return p
 
+def wait_for_video_in_comfy_id_dir(comfy_id: str, timeout_sec: int = 900, min_size: int = 1_000_000) -> str:
+    out_dir = os.path.join(COMFY_OUTPUT_DIR, f"{comfy_id}_video")
+    pattern = os.path.join(out_dir, "*.mp4")
+
+    deadline = time.time() + timeout_sec
+    last_best = None
+
+    while time.time() < deadline:
+        files = glob.glob(pattern)
+        files = [f for f in files if os.path.isfile(f)]
+
+        if files:
+            # беремо найновіший
+            files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            best = files[0]
+            last_best = best
+
+            try:
+                size1 = os.path.getsize(best)
+                if size1 >= min_size:
+                    # перевірка стабільності: розмір не змінюється 2 секунди
+                    time.sleep(2)
+                    size2 = os.path.getsize(best)
+                    if size2 == size1:
+                        return best
+            except OSError:
+                pass
+
+        time.sleep(1)
+
+    raise RuntimeError(f"WAN: відео не знайдено в {out_dir} за {timeout_sec}s. Last seen: {last_best}")
 
 
 # ====== main runner ======
@@ -145,17 +176,21 @@ def run_wan_and_wait_video(
     if not comfy_id:
         raise RuntimeError(f"WAN: comfy result has no id: {result}")
 
-    comfy_video_path = wait_for_wan_video_output(
-        comfy_id=comfy_id,
-        started_at=started_at,
-        timeout_sec=wait_timeout_sec,
-        min_size=1_000_000,
-    )
+
+    comfy_video_path = wait_for_video_in_comfy_id_dir(comfy_id, timeout_sec=wait_timeout_sec)
+
+    # comfy_video_path = wait_for_wan_video_output(
+    #     comfy_id=comfy_id,
+    #     started_at=started_at,
+    #     timeout_sec=wait_timeout_sec,
+    #     min_size=1_000_000,
+    # )
 
     ext = os.path.splitext(comfy_video_path)[1] or ".mp4"
     local_tmp_path = copy_to_tmp(comfy_video_path, f"wan_{comfy_id[:8]}{ext}")
 
     return result, comfy_video_path, local_tmp_path
+
 
 
 def handle_wan_task(task: dict, run_comfy_training_workflow, update_task, log):
