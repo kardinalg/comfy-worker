@@ -2,11 +2,12 @@
 import os
 import time
 import glob
+import shutil
 from typing import Optional, Iterable, Tuple
 
 
 # ====== налаштування шляхів (підправ env у контейнері, якщо треба) ======
-COMFY_ROOT = os.environ.get("COMFY_ROOT") or "/opt/ComfyUI"
+COMFY_ROOT = "/opt/ComfyUI"
 COMFY_OUTPUT_DIR = os.environ.get("COMFY_OUTPUT_DIR") or os.path.join(COMFY_ROOT, "output")
 VIDEO_OUT_DIR = os.path.join(COMFY_OUTPUT_DIR, "video")
 
@@ -52,39 +53,59 @@ def wait_for_new_file_by_patterns(
 
     return None
 
+def wait_for_newest_file(pattern: str, timeout_sec: int = 600, min_size: int = 100_000) -> str:
+    deadline = time.time() + timeout_sec
+    best = None
+    while time.time() < deadline:
+        files = glob.glob(pattern)
+        files = [f for f in files if os.path.isfile(f)]
+        if files:
+            files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            for f in files:
+                if os.path.getsize(f) >= min_size:
+                    return f
+            best = files[0]
+        time.sleep(1)
+    raise RuntimeError(f"File not found by pattern: {pattern}. Last seen: {best}")
+
 
 def copy_to_tmp(src_path: str, out_name: str) -> str:
-    if not os.path.exists(src_path):
-        raise RuntimeError(f"Source file not found: {src_path}")
-
     os.makedirs(TMP_DIR, exist_ok=True)
-    dst_path = os.path.join(TMP_DIR, out_name)
+    dst = os.path.join(TMP_DIR, out_name)
+    shutil.copyfile(src_path, dst)
+    return dst
 
-    # copyfile без shutil — менше імпортів
-    with open(src_path, "rb") as r:
-        data = r.read()
-    with open(dst_path, "wb") as w:
-        w.write(data)
+def pick_wan_video_from_comfy_result(result: dict) -> str:
+    comfy_id = result.get("id")
+    if not comfy_id:
+        raise RuntimeError(f"comfy result has no id: {result}")
 
-    return dst_path
-
+    # comfyui-api створює {id}_video
+    out_dir = os.path.join(COMFY_OUTPUT_DIR, f"{comfy_id}_video")
+    pattern = os.path.join(out_dir, "*.mp4")
+    video_path = wait_for_newest_file(pattern, timeout_sec=900, min_size=1_000_000)
+    return video_path
 
 def wait_for_wan_video_output(
+    *,
+    comfy_id: str,
     started_at: float,
-    prefix: str = "ComfyUI",
     timeout_sec: int = 900,
     min_size: int = 1_000_000,
 ) -> str:
     """
-    Чекає відео, яке SaveVideo з prefix=video/ComfyUI зазвичай кладе в output/video/.
-    prefix тут — базове імʼя файлів (ComfyUI...).
+    comfyui-api зберігає відео в:
+      /opt/ComfyUI/output/{comfy_id}_video/*.mp4
+    (це ти вже побачив руками).
     """
+    out_dir = os.path.join(COMFY_OUTPUT_DIR, f"{comfy_id}_video")
+
     patterns = [
-        os.path.join(VIDEO_OUT_DIR, f"{prefix}*.mp4"),
-        os.path.join(VIDEO_OUT_DIR, f"{prefix}*.webm"),
-        os.path.join(VIDEO_OUT_DIR, f"{prefix}*.mov"),
-        os.path.join(VIDEO_OUT_DIR, f"{prefix}*.mkv"),
-        os.path.join(VIDEO_OUT_DIR, f"{prefix}*.gif"),
+        os.path.join(out_dir, "*.mp4"),
+        os.path.join(out_dir, "*.webm"),
+        os.path.join(out_dir, "*.mov"),
+        os.path.join(out_dir, "*.mkv"),
+        os.path.join(out_dir, "*.gif"),
     ]
 
     p = wait_for_new_file_by_patterns(
@@ -96,10 +117,10 @@ def wait_for_wan_video_output(
     )
     if not p:
         raise RuntimeError(
-            f"WAN: video output not found in {VIDEO_OUT_DIR}. "
-            f"Expected patterns: {patterns}"
+            f"WAN: video output not found in {out_dir}. Expected patterns: {patterns}"
         )
     return p
+
 
 
 # ====== main runner ======
@@ -107,30 +128,32 @@ def run_wan_and_wait_video(
     *,
     workflow_key: str,
     payload: dict,
-    run_comfy_training_workflow,  # dependency injection: твоя функція запуску comfy
+    run_comfy_training_workflow,
     wait_timeout_sec: int = 900,
     comfy_timeout_sec: int = 3600,
-    video_prefix: str = "ComfyUI",
 ) -> Tuple[dict, str, str]:
     """
-    Запускає WAN workflow (через твою run_comfy_training_workflow),
-    потім чекає появи відео-файлу в ComfyUI/output/video/,
+    Запускає WAN workflow,
+    потім чекає появи відео в ComfyUI/output/{comfy_id}_video/,
     копіює його в TMP_DIR.
-    Повертає: (result_dict, comfy_video_path, local_tmp_path)
     """
     started_at = time.time()
 
     result = run_comfy_training_workflow(workflow_key, payload, timeout_sec=comfy_timeout_sec)
 
+    comfy_id = result.get("id")
+    if not comfy_id:
+        raise RuntimeError(f"WAN: comfy result has no id: {result}")
+
     comfy_video_path = wait_for_wan_video_output(
+        comfy_id=comfy_id,
         started_at=started_at,
-        prefix=video_prefix,
         timeout_sec=wait_timeout_sec,
         min_size=1_000_000,
     )
 
     ext = os.path.splitext(comfy_video_path)[1] or ".mp4"
-    local_tmp_path = copy_to_tmp(comfy_video_path, f"wan_{int(time.time())}{ext}")
+    local_tmp_path = copy_to_tmp(comfy_video_path, f"wan_{comfy_id[:8]}{ext}")
 
     return result, comfy_video_path, local_tmp_path
 
@@ -153,8 +176,7 @@ def handle_wan_task(task: dict, run_comfy_training_workflow, update_task, log):
         payload=payload,
         run_comfy_training_workflow=run_comfy_training_workflow,
         wait_timeout_sec=900,
-        comfy_timeout_sec=3600,
-        video_prefix="ComfyUI",
+        comfy_timeout_sec=3600
     )
 
     payload_update = {
