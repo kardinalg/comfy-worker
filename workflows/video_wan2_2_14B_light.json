@@ -171,8 +171,8 @@
   },
   "98": {
     "inputs": {
-      "width": 640,
-      "height": 640,
+      "width": 1024,
+      "height": 768,
       "length": 81,
       "batch_size": 1,
       "positive": [

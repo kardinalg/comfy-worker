@@ -61,7 +61,7 @@ def _get_target_dir(dep_type: str) -> str:
         return COMFYUI_TEXT_ENCODERS_DIR
     if t == "diffusion_models":
         return COMFYUI_DIFFUSION_MODELS_DIR
-    if t == "text_input":
+    if t == "input":
         return COMFYUI_INPUT_DIR
     raise ValueError(f"Unknown dependency type: {dep_type}")
 
