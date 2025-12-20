@@ -337,49 +337,6 @@ def handle_lora_train_task(task):
     update_task(tid, "done", None, payload_update)
     log(f"✅ LoRA-задача #{tid} завершена, модель: {out_model_path} → {up.get('path')}")
 
-def handle_wan_task(workflow_key, payload):
-    client_id = str(uuid.uuid4())
-
-    # 1) будуємо workflow з payload
-    workflow = build_workflow_from_payload(workflow_key, payload)
-
-    # 2) запускаємо workflow через comfyui-api
-    result = run_workflow_via_comfy_api(workflow, client_id)
-    task_id = result.get("id")
-    log(f"comfyui-api task_id={task_id}")
-
-    images = result.get("images") or []
-    if not images:
-        raise RuntimeError(f"comfyui-api не повернув images: {result}")
-
-    # 3) беремо перше зображення
-    first = images[0]
-
-    # comfyui-api може повернути або чистий base64-рядок,
-    # або dict з полями типу {"image": "...", "filename": "..."}
-    if isinstance(first, dict):
-        b64_data = first.get("image") or first.get("data")
-        filename = first.get("filename") or f"{task_id}.png"
-    else:
-        b64_data = first
-        filename = f"{task_id}.png"
-
-    if not b64_data:
-        raise RuntimeError(f"Немає base64 даних у images[0]: {first}")
-
-    # 4) зберігаємо в TMP_DIR
-    ext = os.path.splitext(filename)[1] or ".png"
-    safe_id = (task_id or "comfy")[:8]
-    tmp_name = f"comfy_{safe_id}{ext}"
-    local_path = os.path.join(TMP_DIR, tmp_name)
-
-    os.makedirs(TMP_DIR, exist_ok=True)
-    with open(local_path, "wb") as f:
-        f.write(base64.b64decode(b64_data))
-
-    log(f"Зображення збережено локально: {local_path}")
-    return local_path
-
 def main():
     init_downloader(
         api_token=API_TOKEN,
