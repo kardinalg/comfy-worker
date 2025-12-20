@@ -252,18 +252,14 @@
     }
   },
   "108": {
-    "inputs": {
-      "filename_prefix": "video/ComfyUI",
-      "format": "mp4",
-      "codec": "h264",
-      "video": [
-        "94",
-        0
-      ]
-    },
-    "class_type": "SaveVideo",
-    "_meta": {
-      "title": "Save Video"
-    }
+  "inputs": {
+    "filename_prefix": "wan_frames/ComfyUI",
+    "images": ["87", 0]
+  },
+  "class_type": "SaveImage",
+  "_meta": {
+    "title": "Save Frames"
   }
+}
+
 }
