@@ -2,8 +2,8 @@
   "3": {
     "inputs": {
       "seed": param_seed,
-      "steps": param_steps,
-      "cfg": 2.5,
+      "steps": 4,
+      "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 1,
@@ -92,7 +92,7 @@
     "inputs": {
       "shift": 3,
       "model": [
-        "37",
+        "89",
         0
       ]
     },
@@ -225,6 +225,20 @@
     "class_type": "FluxKontextImageScale",
     "_meta": {
       "title": "FluxKontextImageScale"
+    }
+  },
+  "89": {
+    "inputs": {
+      "lora_name": "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "37",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoraLoaderModelOnly"
     }
   },
   "434": {
