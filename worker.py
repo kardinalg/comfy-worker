@@ -122,7 +122,7 @@ def build_workflow_from_payload(workflow_key: str, payload: dict) -> dict:
         # числа
         elif isinstance(value, (int, float)):
             replacement = str(value)
-        elif key == 'lora_nodes':
+        elif (key == 'lora_nodes' or key == 'images_edit'):
             replacement = str(value)
         else:
             s = str(value)
