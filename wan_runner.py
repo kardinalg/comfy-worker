@@ -121,7 +121,7 @@ def wait_for_wan_video_output(
         )
     return p
 
-def wait_for_video_in_comfy_id_dir(comfy_id: str, timeout_sec: int = 900, min_size: int = 1_000_000) -> str:
+def wait_for_video_in_comfy_id_dir(comfy_id: str, timeout_sec: int = 900, min_size: int = 100_000) -> str:
     out_dir = os.path.join(COMFY_OUTPUT_DIR, f"{comfy_id}_video")
     pattern = os.path.join(out_dir, "*.mp4")
 
@@ -162,6 +162,7 @@ def run_wan_and_wait_video(
     run_comfy_training_workflow,
     wait_timeout_sec: int = 900,
     comfy_timeout_sec: int = 3600,
+    log,
 ) -> Tuple[dict, str, str]:
     """
     Запускає WAN workflow,
@@ -171,8 +172,8 @@ def run_wan_and_wait_video(
     started_at = time.time()
 
     result = run_comfy_training_workflow(workflow_key, payload, timeout_sec=comfy_timeout_sec)
-
     comfy_id = result.get("id")
+    log(f"✅ Comfy задача завершена: {comfy_id}")
     if not comfy_id:
         raise RuntimeError(f"WAN: comfy result has no id: {result}")
 
@@ -211,7 +212,8 @@ def handle_wan_task(task: dict, run_comfy_training_workflow, update_task, log):
         payload=payload,
         run_comfy_training_workflow=run_comfy_training_workflow,
         wait_timeout_sec=900,
-        comfy_timeout_sec=3600
+        comfy_timeout_sec=3600,
+        log = log
     )
 
     payload_update = {
