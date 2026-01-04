@@ -14,8 +14,8 @@
     "inputs": {
       "add_noise": "disable",
       "noise_seed": 0,
-      "steps": 5,
-      "cfg": 1,
+      "steps": param_steps_low,
+      "cfg": param_cfg_low,
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 2,
@@ -47,8 +47,8 @@
     "inputs": {
       "add_noise": "enable",
       "noise_seed": param_seed,
-      "steps": 5,
-      "cfg": 2,
+      "steps": param_steps_high,
+      "cfg": param_cfg_high,
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 0,
