@@ -374,7 +374,7 @@ def main():
             elif ttype == "lora_train":
                 # 🔥 новий тип задачі
                 handle_lora_train_task(task)
-            elif ttype == "frame_wan":
+            elif ttype in ("frame_wan", "upscale"):
                 local_video = handle_wan_task(task, run_comfy_training_workflow, update_task, log)
                 upload_file(tid, local_video)
             else:

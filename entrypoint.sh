@@ -130,6 +130,17 @@ if [ ! -d "/opt/ComfyUI/custom_nodes/ComfyUI-FluxTrainer/.git" ]; then
 
   cd /opt/ComfyUI/custom_nodes
   git clone https://github.com/whitmell/ComfyUI-RvTools.git
+
+  cd /opt/ComfyUI/custom_nodes
+  git clone https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite
+  cd ComfyUI-VideoHelperSuite
+  pip install -r requirements.txt
+
+  cd /opt/ComfyUI/custom_nodes
+  git clone https://github.com/Fannovel16/ComfyUI-Frame-Interpolation
+  cd ComfyUI-Frame-Interpolation
+  pip install -r requirements-no-cupy.txt
+
 fi
 
 mkdir -p /opt/output
