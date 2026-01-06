@@ -15,6 +15,7 @@ COMFYUI_CHECKPOINTS_DIR = os.path.join(COMFYUI_DIR, "models", "checkpoints")
 COMFYUI_VAE_DIR = os.path.join(COMFYUI_DIR, "models", "vae")
 COMFYUI_TEXT_ENCODERS_DIR = os.path.join(COMFYUI_DIR, "models", "text_encoders")
 COMFYUI_DIFFUSION_MODELS_DIR = os.path.join(COMFYUI_DIR, "models", "diffusion_models")
+COMFYUI_UPSCALE = os.path.join(COMFYUI_DIR, "models", "upscale")
 COMFYUI_INPUT_DIR = os.path.join(COMFYUI_DIR, "input")
 
 # ---- runtime config (ініціалізується з main) ----
@@ -61,6 +62,8 @@ def _get_target_dir(dep_type: str) -> str:
         return COMFYUI_TEXT_ENCODERS_DIR
     if t == "diffusion_models":
         return COMFYUI_DIFFUSION_MODELS_DIR
+    if t == "upscale":
+        return COMFYUI_UPSCALE
     if t == "input":
         return COMFYUI_INPUT_DIR
     raise ValueError(f"Unknown dependency type: {dep_type}")
