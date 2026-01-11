@@ -26,12 +26,24 @@
       "frame_load_cap": 0,
       "skip_first_frames": 0,
       "select_every_nth": 1,
-      "format": "Wan",
-      "meta_batch": ["25", 0]
+      "format": "Wan"
     },
     "class_type": "VHS_LoadVideo",
     "_meta": {
       "title": "Load Video (Upload) 🎥🅥🅗🅢"
+    }
+  },
+  "35": {
+    "inputs": {
+      "batch_size": 8,
+      "images": [
+        "20",
+        0
+      ]
+    },
+    "class_type": "RebatchImages",
+    "_meta": {
+      "title": "Rebatch Images"
     }
   },
   "25": {
@@ -51,7 +63,7 @@
         0
       ],
       "image": [
-        "20",
+        "35",
         0
       ]
     },
