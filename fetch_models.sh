@@ -6,6 +6,8 @@ git pull
 pip install -r requirements.txt
 cp -rfv /opt/worker/comfy_patch/* /opt/ComfyUI/
 
+apt-get update
+apt-get install -y ffmpeg
 # ========= CONFIG =========
 #MODEL_DIR="/opt/ComfyUI/models/checkpoints"
 #MODEL_ID="388349"                     # Copax Cute XL
