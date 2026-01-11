@@ -26,7 +26,8 @@
       "frame_load_cap": 0,
       "skip_first_frames": 0,
       "select_every_nth": 1,
-      "format": "Wan"
+      "format": "Wan",
+      "meta_batch": ["25", 0]
     },
     "class_type": "VHS_LoadVideo",
     "_meta": {
@@ -35,8 +36,8 @@
   },
   "25": {
     "inputs": {
-      "frames_per_batch": 1,
-      "count": 22
+      "frames_per_batch": 2,
+      "count": 81
     },
     "class_type": "VHS_BatchManager",
     "_meta": {
