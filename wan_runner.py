@@ -2,7 +2,7 @@
 import os
 import time
 import glob
-import shutil
+import shutil,subprocess
 from typing import Optional, Iterable, Tuple
 
 
@@ -121,6 +121,15 @@ def wait_for_wan_video_output(
         )
     return p
 
+def ffprobe_ok(path: str) -> bool:
+    p = subprocess.run(
+        ["ffprobe", "-hide_banner", "-v", "error", "-show_format", "-show_streams", path],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return p.returncode == 0
+
 def wait_for_video_in_comfy_id_dir(comfy_id: str, timeout_sec: int = 900, min_size: int = 100_000) -> str:
     out_dir = os.path.join(COMFY_OUTPUT_DIR, f"{comfy_id}_video")
     pattern = os.path.join(out_dir, "*.mp4")
@@ -129,11 +138,8 @@ def wait_for_video_in_comfy_id_dir(comfy_id: str, timeout_sec: int = 900, min_si
     last_best = None
 
     while time.time() < deadline:
-        files = glob.glob(pattern)
-        files = [f for f in files if os.path.isfile(f)]
-
+        files = [f for f in glob.glob(pattern) if os.path.isfile(f)]
         if files:
-            # беремо найновіший
             files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
             best = files[0]
             last_best = best
@@ -141,17 +147,21 @@ def wait_for_video_in_comfy_id_dir(comfy_id: str, timeout_sec: int = 900, min_si
             try:
                 size1 = os.path.getsize(best)
                 if size1 >= min_size:
-                    # перевірка стабільності: розмір не змінюється 2 секунди
-                    time.sleep(2)
+                    # чекаємо стабільності довше (5с) + щоб файл "постарів"
+                    time.sleep(5)
                     size2 = os.path.getsize(best)
-                    if size2 == size1:
-                        return best
+                    age = time.time() - os.path.getmtime(best)
+
+                    if size2 == size1 and age >= 5:
+                        # головне: файл реально валідний mp4
+                        if ffprobe_ok(best):
+                            return best
             except OSError:
                 pass
 
         time.sleep(1)
 
-    raise RuntimeError(f"WAN: відео не знайдено в {out_dir} за {timeout_sec}s. Last seen: {last_best}")
+    raise RuntimeError(f"WAN: відео не знайдено/не фіналізовано в {out_dir} за {timeout_sec}s. Last seen: {last_best}")
 
 
 # ====== main runner ======
