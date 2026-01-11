@@ -4,6 +4,7 @@ set -e
 cd /opt/ComfyUI
 git pull
 pip install -r requirements.txt
+cp -rfv /opt/worker/comfy_patch/* /opt/ComfyUI/
 
 # ========= CONFIG =========
 #MODEL_DIR="/opt/ComfyUI/models/checkpoints"
