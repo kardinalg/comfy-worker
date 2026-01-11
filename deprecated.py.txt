@@ -1,0 +1,77 @@
+UPLOAD_LORA_INIT  = f"{API_BASE}/index.php?r=lora/uploadLoraInit"
+UPLOAD_LORA_CHUNK  = f"{API_BASE}/index.php?r=lora/uploadLoraChunk"
+UPLOAD_LORA_FINAL  = f"{API_BASE}/index.php?r=lora/uploadLoraFinal"
+
+
+            elif ttype == "lora_train":
+                # 🔥 новий тип задачі
+                handle_lora_train_task(task)
+
+def handle_lora_train_task(task):
+    tid = task["id"]
+    workflow_key = task["workflow_key"]
+    payload = task.get("payload") or {}
+
+    lora_name = payload.get("lora_name")
+    if not lora_name:
+        raise RuntimeError("payload.lora_name обовʼязковий")
+
+    # === де comfy зберігає модель локально ===
+    # Рекомендую НЕ /opt/output, а volume, але лишаю як ти написав
+    out_model_path = f"/opt/output/{tid}.safetensors_rank16_fp16.safetensors"
+
+    # === параметри upload ===
+    character_folder = payload.get("character_name") or payload.get("character_id") or lora_name
+
+    # 1) Якщо файл вже є — НЕ тренуємо, одразу upload
+    if os.path.exists(out_model_path) and os.path.getsize(out_model_path) > 10_000_000:
+        log(f"[LoRA #{tid}] Файл вже існує: {out_model_path} — пропускаю тренування, роблю upload.")
+        update_task(tid, "running", payload_update={"stage": "upload_existing_model"})
+        upload_samples(tid)
+        up = upload_chunked(
+            file_path=out_model_path,
+            lora_name=lora_name,
+        )
+        update_task(tid, "done", None, {
+            "note": "LoRA uploaded (training skipped, file existed)",
+            "lora_model_local": out_model_path,
+        })
+        log(f"✅ LoRA-задача #{tid} завершена (skip train), upload: {up.get('path')}")
+        return
+
+    clear_dir()
+
+    # 3) Запускаємо comfy training
+    log(f"[LoRA #{tid}] Старт тренування через Comfy, workflow={workflow_key}")
+    update_task(tid, "running", payload_update={"stage": "comfy_training_started"})
+
+    result = run_comfy_training_workflow(workflow_key, payload, timeout_sec=7200)
+
+    log(f"[LoRA #{tid}] Тренування завершене шукаю файл {out_model_path}")
+    # 4) Чекаємо щоб файл реально зʼявився
+    if not wait_for_file(out_model_path, timeout_sec=600, min_size=1_000_000):
+        raise RuntimeError(f"[LoRA #{tid}] Comfy завершився, але файл не знайдено/замалий: {out_model_path}")
+
+    log(f"[LoRA #{tid}] Файл знайдено")
+    # 5) Upload
+    update_task(tid, "running", payload_update={"stage": "upload_trained_model", "comfy_id": result.get("id")})
+    
+    upload_samples(tid)
+    log(f"[LoRA #{tid}] Samples завантажено")
+    up = upload_chunked(
+        file_path=out_model_path,
+        lora_name=lora_name,
+    )
+    log(f"[LoRA #{tid}] Файл завантажено")
+
+    payload_update = {
+        "note": "LoRA training done via comfyui-api and uploaded",
+        "comfy_id": result.get("id"),
+        "stats": result.get("stats"),
+        "lora_model_local": out_model_path,
+        "lora_model_remote": up.get("path"),
+        "remote_size": up.get("size"),
+    }
+
+    update_task(tid, "done", None, payload_update)
+    log(f"✅ LoRA-задача #{tid} завершена, модель: {out_model_path} → {up.get('path')}")

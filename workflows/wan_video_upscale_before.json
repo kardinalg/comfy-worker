@@ -64,7 +64,7 @@
   },
   "27": {
     "inputs": {
-      "model_name": "4x-UltraSharp.pth"
+      "model_name": "param_upscale_model"
     },
     "class_type": "UpscaleModelLoader",
     "_meta": {

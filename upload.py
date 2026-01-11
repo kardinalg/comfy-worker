@@ -3,10 +3,15 @@ import time
 import hashlib
 import requests
 
+API_BASE = os.environ["API_BASE"]
 _API_TOKEN = None
 _UPLOAD_FILE_URL = None
 _UPLOAD_IMAGE_URL = None
 _LOG = None
+UPLOAD_INIT  = f"{API_BASE}/index.php?r=chunkUpload/uploadInit"
+UPLOAD_CHUNK  = f"{API_BASE}/index.php?r=chunkUpload/uploadChunk"
+UPLOAD_FINAL  = f"{API_BASE}/index.php?r=chunkUpload/uploadFinal"
+
 
 def init_uploader(api_token: str, upload_file_url: str, upload_image_url: str, log_fn):
     """
@@ -31,7 +36,7 @@ def sha256_file(path, chunk=1024 * 1024):
 
 def upload_file(task_id: int, path: str):
     files = {"file": open(path, "rb")}
-    data = {"token": _API_TOKEN, "task_id": task_id}
+    data = {"token": _API_TOKEN, "task_id": task_id, "file_name": os.path.basename(path)}
     try:
         r = requests.post(_UPLOAD_FILE_URL, data=data, files=files, timeout=120)
         r.raise_for_status()
@@ -45,7 +50,7 @@ def upload_file(task_id: int, path: str):
 
 def upload_image(task_id: int, path: str):
     files = {"file": open(path, "rb")}
-    data = {"token": _API_TOKEN, "task_id": task_id}
+    data = {"token": _API_TOKEN, "task_id": task_id, "file_name": os.path.basename(path)}
     try:
         r = requests.post(_UPLOAD_IMAGE_URL, data=data, files=files, timeout=120)
         r.raise_for_status()
@@ -58,12 +63,9 @@ def upload_image(task_id: int, path: str):
         files["file"].close()
 
 
-def upload_lora_chunked(
-    upload_lora_init_url: str,
-    upload_lora_chunk_url: str,
-    upload_lora_final_url: str,
+def upload_chunked(
     file_path: str,
-    lora_name: str,
+    task_id: int,
     chunk_size: int = 2 * 1024 * 1024,
     max_retries: int = 8,
 ):
@@ -72,8 +74,9 @@ def upload_lora_chunked(
 
     headers = {"X-Auth-Token": _API_TOKEN}
 
-    r = requests.post(upload_lora_init_url, headers=headers, data={
-        "lora_name": lora_name,
+    r = requests.post(UPLOAD_INIT, headers=headers, data={
+        "task_id": task_id,
+        "file_name": os.path.basename(file_path),
         "total_size": str(total_size),
         "sha256": file_hash,
     }, timeout=30)
@@ -98,9 +101,9 @@ def upload_lora_chunked(
             while True:
                 try:
                     rr = requests.post(
-                        upload_lora_chunk_url,
+                        UPLOAD_CHUNK,
                         headers={**headers, "Content-Type": "application/octet-stream"},
-                        params={"lora_name": lora_name, "offset": str(offset)},
+                        params={"task_id": task_id, "file_name": os.path.basename(file_path), "offset": str(offset)},
                         data=data,
                         timeout=120,
                     )
@@ -130,8 +133,9 @@ def upload_lora_chunked(
                     _LOG(f"[upload] retry {attempt}/{max_retries} after {sleep}s: {e}")
                     time.sleep(sleep)
 
-    rf = requests.post(upload_lora_final_url, headers=headers, data={
-        "lora_name": lora_name,
+    rf = requests.post(UPLOAD_FINAL, headers=headers, data={
+        "task_id": task_id,
+        "file_name": os.path.basename(file_path),
         "total_size": str(total_size),
         "sha256": file_hash,
     }, timeout=60)
@@ -159,3 +163,4 @@ def upload_samples(task_id, samples_dir="/opt/output/sample"):
             _LOG(f"[OK] uploaded: {file_path}")
         except Exception as e:
             _LOG(f"[ERROR] failed to upload {file_path}: {e}")
+
