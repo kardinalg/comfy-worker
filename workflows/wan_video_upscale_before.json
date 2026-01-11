@@ -46,16 +46,6 @@
       "title": "Rebatch Images"
     }
   },
-  "25": {
-    "inputs": {
-      "frames_per_batch": 1,
-      "count": 81
-    },
-    "class_type": "VHS_BatchManager",
-    "_meta": {
-      "title": "Meta Batch Manager 🎥🅥🅗🅢"
-    }
-  },
   "26": {
     "inputs": {
       "upscale_model": [
@@ -95,10 +85,6 @@
       "save_output": true,
       "images": [
         "18",
-        0
-      ],
-      "meta_batch": [
-        "25",
         0
       ]
     },
