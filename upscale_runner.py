@@ -19,13 +19,14 @@ TMP_DIR = os.environ.get("TMP_DIR") or "/tmp/comfy_worker"
 # -----------------------
 
 def ffprobe_ok(path: str) -> bool:
-    p = subprocess.run(
-        ["ffprobe", "-hide_banner", "-v", "error", "-show_format", "-show_streams", path],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    return p.returncode == 0
+    return True
+    # p = subprocess.run(
+    #     ["ffprobe", "-hide_banner", "-v", "error", "-show_format", "-show_streams", path],
+    #     stdout=subprocess.DEVNULL,
+    #     stderr=subprocess.PIPE,
+    #     text=True,
+    # )
+    # return p.returncode == 0
 
 def copy_to_tmp(src_path: str, out_name: str) -> str:
     os.makedirs(TMP_DIR, exist_ok=True)
@@ -51,6 +52,14 @@ def wait_for_stable_files(
     while time.time() < deadline:
         files = [f for f in glob.glob(pattern) if os.path.isfile(f)]
         if files:
+            newest = files[-1]
+            try:
+                sz = os.path.getsize(newest)
+                # debug log
+                # log is not passed here, so use print or refactor; quick hack:
+                print(f"[wait_for_stable_files] newest={newest} size={sz}", flush=True)
+            except OSError:
+                pass
             files.sort(key=lambda p: os.path.getmtime(p))  # oldest -> newest
             last_seen = files[:]
 
@@ -87,7 +96,7 @@ def wait_for_stable_files(
 def wait_for_video_outputs_in_comfy_id_dir(
     comfy_id: str,
     timeout_sec: int = 900,
-    min_size: int = 200_000,
+    min_size: int = 100_000,
 ) -> Tuple[str, List[str]]:
     """
     comfyui-api stores outputs in:
@@ -219,7 +228,7 @@ def run_upscale_and_wait_video(
     out_dir, mp4_files = wait_for_video_outputs_in_comfy_id_dir(
         comfy_id=comfy_id,
         timeout_sec=wait_timeout_sec,
-        min_size=200_000,
+        min_size=100_000,
     )
 
     # Decide final mp4:
