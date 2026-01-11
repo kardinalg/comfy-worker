@@ -96,8 +96,8 @@
   "40": {
     "inputs": {
       "measurement": "percentage",
-      "width": 50,
-      "height": 50,
+      "width": param_down_percent,
+      "height": param_down_percent,
       "fit": "crop",
       "method": "nearest-exact",
       "image": [
