@@ -138,6 +138,27 @@ def build_workflow_from_payload(workflow_key: str, payload: dict) -> dict:
 
     return workflow
 
+def apply_iteration_to_workflow_text(base_workflow: dict, mapping: dict) -> dict:
+    """
+    base_workflow: dict після першої підстановки payload -> workflow
+    mapping: {'itr_image': '...', 'itr_prompt': '...', 'itr_first_image': '...'}  (будь-які з них)
+    Повертає dict workflow для конкретної ітерації.
+    """
+    txt = json.dumps(base_workflow, ensure_ascii=False)
+
+    for k, v in mapping.items():
+        # важливо: підставляємо як СТРОКУ, екрановану через json.dumps,
+        # але без зовнішніх лапок, щоб збігалось з твоїм стилем підстановок
+        if v is None:
+            rep = "null"
+        else:
+            dumped = json.dumps(str(v), ensure_ascii=False)
+            rep = dumped[1:-1]
+
+        txt = txt.replace(k, rep)
+
+    return json.loads(txt)
+
 def queue_prompt_to_comfy(workflow: dict, client_id: str) -> str:
     """
     Відправляємо workflow в ComfyUI через /prompt.
@@ -251,6 +272,74 @@ def generate_with_comfy(workflow_key: str, payload: dict) -> str:
     log(f"Зображення збережено локально: {local_path}")
     return local_path
 
+def save_first_image_from_comfy_result(result: dict, task_id: str | None = None) -> str:
+    images = result.get("images") or []
+    if not images:
+        raise RuntimeError(f"comfyui-api не повернув images: {result}")
+
+    first = images[0]
+
+    if isinstance(first, dict):
+        b64_data = first.get("image") or first.get("data")
+        filename = first.get("filename") or (f"{task_id}.png" if task_id else "comfy.png")
+    else:
+        b64_data = first
+        filename = (f"{task_id}.png" if task_id else "comfy.png")
+
+    if not b64_data:
+        raise RuntimeError(f"Немає base64 даних у images[0]: {first}")
+
+    ext = os.path.splitext(filename)[1] or ".png"
+    safe_id = (task_id or "comfy")[:8]
+    tmp_name = f"comfy_{safe_id}{ext}"
+    local_path = os.path.join(TMP_DIR, tmp_name)
+
+    os.makedirs(TMP_DIR, exist_ok=True)
+    with open(local_path, "wb") as f:
+        f.write(base64.b64decode(b64_data))
+
+    log(f"Зображення збережено локально: {local_path}")
+    return local_path
+
+
+def generate_with_comfy_iterations(workflow_key: str, payload: dict) -> str:
+    """
+    1) будуємо base_workflow через існуючий build_workflow_from_payload (без iterations)
+    2) потім проганяємо iterations, кожну — окремий запуск workflow
+    3) кожен результат стає itr_first_image наступного кроку
+    """
+    iterations = payload.get("iterations") or []
+
+    # 1) перша підстановка (payload -> workflow) як і було
+    base_workflow = build_workflow_from_payload(workflow_key, payload)
+
+    first_img = None
+    last_out = None
+
+    for idx, it in enumerate(iterations):
+        ref_img = it.get("image")
+        itr_prompt = it.get("prompt", "")
+        if first_img is None:
+            first_img = ref_img
+
+        wf_i = apply_iteration_to_workflow_text(
+            base_workflow,
+            {
+                "itr_first_image": first_img,
+                "itr_image": ref_img,
+                "itr_prompt": itr_prompt,
+            }
+        )
+
+        result = run_workflow_via_comfy_api(wf_i, client_id=str(uuid.uuid4()))
+
+        local_path = save_first_image_from_comfy_result(result)  # <-- винеси існуючий шматок в хелпер
+
+        last_out = local_path
+        first_img = last_out
+
+    return last_out
+
 
 # ------------------ Головний цикл ------------------
 def wait_for_file(path: str, timeout_sec: int = 300, min_size: int = 10_000_000):
@@ -312,6 +401,14 @@ def main():
                     file_path=local_video,
                     task_id=tid,
                 )
+            elif ttype == "frame_qwen":
+                local_path = generate_with_comfy_iterations(workflow_key, payload)
+                remote_path = upload_image(tid, local_path)
+                if remote_path:
+                    update_task(tid, "done", None, {"result_path": remote_path})
+                    log(f"✅ Завершено задачу #{tid}, result={remote_path}")
+                else:
+                    update_task(tid, "failed", "Upload failed")
             else:
                 update_task(tid, "failed", f"Невідомий тип задачі: {ttype}")
 
